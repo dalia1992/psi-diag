@@ -506,6 +506,8 @@ if not en_vercel():
     async def cabeceras_locales(request: Request, call_next):
         respuesta = await call_next(request)
         if not request.url.path.startswith("/api/"):
+            # Solo en local: que el navegador revise siempre si hay una versión nueva de la página (sin esto puede enseñar una copia vieja).
+            respuesta.headers["Cache-Control"] = "no-cache"
             try:
                 reglas = json.loads(_VERCEL_JSON.read_text(encoding="utf-8")).get("headers", [])
                 for regla in reglas:

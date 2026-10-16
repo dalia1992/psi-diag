@@ -603,3 +603,16 @@ def test_acceso_no_registra_el_codigo_en_el_log(cliente, monkeypatch, caplog):
         cliente.post("/api/acceso", headers={"x-access-code": "secreto-muy-largo"})
     texto = " ".join(r.getMessage() for r in caplog.records)
     assert "intento-secreto" not in texto and "secreto-muy-largo" not in texto
+
+
+# ----------------------------------------------------------------------------- pantalla en local: sin copias viejas
+def test_en_local_la_pantalla_pide_al_navegador_revisar_si_hay_version_nueva(cliente):
+    for ruta in ("/", "/app.js", "/estilos.css"):
+        r = cliente.get(ruta)
+        assert r.status_code == 200, ruta
+        assert r.headers["cache-control"] == "no-cache", ruta
+        assert "content-security-policy" in r.headers, ruta   # las cabeceras de vercel.json siguen aplicándose
+
+
+def test_la_api_sigue_sin_guardarse_en_cache(cliente):
+    assert cliente.get("/api/health").headers.get("cache-control") != "no-cache"
