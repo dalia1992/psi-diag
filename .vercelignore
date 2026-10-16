@@ -1,0 +1,11 @@
+# Lo que no hace falta en la función desplegada (nada de esto se lee en ejecución).
+# NO excluir: models/, assets/, public/, poc_psico/, exportar/, app.py, componentes.py, errores_api.py,
+# vercel.json, requirements.txt ni .python-version (los comprueba tests/test_despliegue.py).
+/tests/
+/docs/
+/scripts/
+/.superpowers/
+/*.md
+/requirements-dev.txt
+__pycache__/
+.pytest_cache/
