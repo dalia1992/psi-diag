@@ -430,7 +430,8 @@ def test_resultado_al_cliente_solo_tiene_campos_permitidos(monkeypatch):
     r = _con_resultado(monkeypatch, _resultado_interno())
     for prohibido in ("icd11_", "cie11-mcp-server", "guias.example", "traza_tools", "latencias", "prob_clinico", "candidatos", "texto_anon", "reporte_md", "rondas_busqueda"):
         assert prohibido not in r.text
-    assert set(eventos_de(r)[-1]["resultado"]) <= {"estado_final", "razon_amigable", "reporte", "advertencias", "texto_ocr"}
+    assert set(eventos_de(r)[-1]["resultado"]) <= {"estado_final", "razon_amigable", "reporte", "advertencias"}
+    assert "texto leído" not in r.text   # el texto del OCR llega solo en el evento del paso «lectura»
 
 
 def test_resultado_ok_conserva_reporte_y_advertencias(monkeypatch):
@@ -530,3 +531,30 @@ async def test_la_validacion_del_archivo_corre_fuera_del_hilo_del_bucle(monkeypa
 
     await modulo_app._entrada_de({"archivo": Archivo(), "confirma_ocr": "true"})
     assert hilos and hilos[0] is not threading.main_thread()
+
+
+def test_el_resultado_final_no_incluye_texto_ocr_pero_el_evento_de_lectura_si_lleva_el_texto_leido(monkeypatch):
+    componentes, _ = construir(ocr=lambda ruta: ENTRADA)
+    monkeypatch.setattr(modulo_app, "componentes_de_prueba", componentes)
+    r = TestClient(modulo_app.app).post("/api/caso", data={"confirma_ocr": "true"}, files={"archivo": ("caso.png", png_valido(), "image/png")})
+    eventos = eventos_de(r)
+    assert "texto_ocr" not in eventos[-1]["resultado"]
+    lectura = [e for e in eventos if e.get("id") == "lectura" and e.get("estado") == "listo"]
+    assert lectura and lectura[0]["detalle"]["lineas"]
+
+
+# ----------------------------------------------------------------------------- fallo al armar los componentes
+def test_si_no_se_pueden_armar_los_componentes_el_error_es_reintentable_y_amable(monkeypatch):
+    from poc_psico.errores import FlujoDetenido
+
+    async def roto():
+        raise FlujoDetenido("No se pudo conectar al MCP CIE-11 (https://servidor-interno.example/sse): Connection refused TOKEN-XYZ")
+
+    monkeypatch.setenv("OPENROUTER_API_KEY", "clave")
+    monkeypatch.setattr(modulo_app, "resolver_componentes", roto)
+    r = TestClient(modulo_app.app).post("/api/caso", data={"texto": ENTRADA})
+    error = eventos_de(r)[-1]
+    assert error["tipo"] == "error"
+    assert error["error"]["codigo"] == "backend" and error["error"]["reintentable"] is True
+    assert error["error"]["mensaje"] == "El servicio de consulta de la CIE-11 no respondió. Puedes intentarlo de nuevo en un momento."
+    assert "servidor-interno" not in r.text and "TOKEN-XYZ" not in r.text and "Connection" not in r.text

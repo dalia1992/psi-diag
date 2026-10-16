@@ -316,3 +316,13 @@ def test_api_acepta_sustitutos_utf16_sueltos(cliente, formato):
     assert r.status_code == 200
     assert r.headers["content-disposition"] == f'attachment; filename="reporte-2026-10-15.{formato}"'
     Document(io.BytesIO(r.content)) if formato == "docx" else PdfReader(io.BytesIO(r.content)).pages
+
+
+def test_docx_lleva_metadatos_propios_y_no_los_de_la_plantilla():
+    from datetime import datetime, timedelta, timezone
+    propiedades = Document(io.BytesIO(generar_docx(reporte_demo()))).core_properties
+    assert propiedades.title == "Reporte de apoyo al psicodiagnóstico"
+    assert propiedades.author == propiedades.last_modified_by == "Ψ-DIAG con IA"
+    ahora = datetime.now(timezone.utc)
+    for marca in (propiedades.created, propiedades.modified):
+        assert abs(ahora - marca) < timedelta(minutes=5)

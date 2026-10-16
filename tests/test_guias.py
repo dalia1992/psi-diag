@@ -361,3 +361,15 @@ def test_buscar_guias_con_jev_busca_en_las_fuentes_elegidas():
     decidir = crear_decisor_jev("clave", post=PostFalso(respuesta_jev("ambas")))
     guias = buscar_guias(CANDIDATOS, SINTOMAS, "clave", decidir, post=busqueda)
     assert [g["tipo"] for g in guias] == ["imss", "apa", "oms"] and "jev" in guias[1]["motivo"].lower()
+
+
+def test_los_avisos_del_log_solo_llevan_el_tipo_de_la_excepcion(caplog):
+    cuerpo = 'Laura Mendoza dijo {"error":"CUENTA-SECRETA"}'
+    with caplog.at_level("WARNING", logger="poc_psico.guias"):
+        buscar(PostFalso(respuesta_con(IMSS)), Decisor(error=RuntimeError(cuerpo)))
+        decidir = crear_decisor_jev("clave", post=PostFalso(RespuestaFalsa(500, texto=cuerpo)), respaldo=Decisor(["oms"]))
+        decidir(CANDIDATOS, SINTOMAS, GUIAS_IMSS)
+    registro = "\n".join(r.getMessage() for r in caplog.records)
+    assert "RuntimeError" in registro and "FlujoDetenido" in registro
+    for secreto in ("Laura", "CUENTA-SECRETA", "500"):
+        assert secreto not in registro

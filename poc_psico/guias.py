@@ -154,7 +154,7 @@ def crear_decisor_jev(api_key: str, respaldo=None, post=requests.post, modelo=MO
         except Exception as e:
             if respaldo is None:
                 raise
-            logger.warning("JEV no respondió (%s): se usa el decisor de respaldo", e)
+            logger.warning("JEV no respondió (%s): se usa el decisor de respaldo", type(e).__name__)
             return respaldo(candidatos, sintomas, guias_imss)
 
     return decidir
@@ -220,7 +220,7 @@ def buscar_guias(
     try:
         decision = decidir(candidatos, sintomas, list(guias))
     except Exception as e:
-        logger.warning("No se pudo decidir las fuentes adicionales (%s): solo se usan las guías del IMSS", e)
+        logger.warning("No se pudo decidir las fuentes adicionales (%s): solo se usan las guías del IMSS", type(e).__name__)
         return guias
     elegidas = [f for f in FUENTES if f != FUENTE_PRINCIPAL and f in set(decision.fuentes)]  # orden fijo, sin repetidas
     for tipo in elegidas:

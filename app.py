@@ -26,6 +26,7 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 from starlette.background import BackgroundTask
 
 from errores_api import ErrorApi, cuerpo_error, limpiar_texto, respuesta_error
+from poc_psico.errores import FlujoDetenido
 
 BACKEND = "langchain"
 MAX_POR_MINUTO = int(os.getenv("MAX_POR_MINUTO", "8"))   # consultas por minuto y por visitante
@@ -223,7 +224,7 @@ async def _entrada_de(formulario) -> tuple[str, str | None, bytes | None, str]:
 
 
 # ----------------------------------------------------------------------------- 4. flujo
-CAMPOS_RESULTADO_CLIENTE = ("estado_final", "razon_amigable", "reporte", "advertencias", "texto_ocr")
+CAMPOS_RESULTADO_CLIENTE = ("estado_final", "razon_amigable", "reporte", "advertencias")   # el texto del OCR va solo en el paso «lectura»
 
 
 def resultado_para_cliente(resultado: dict) -> dict:
@@ -295,7 +296,11 @@ async def transmitir(entrada: str, ruta: Path | None, id_solicitud: str, via: st
             limite = 280.0
         deadline = time.monotonic() + limite
         try:
-            c = await asyncio.wait_for(resolver_componentes(), timeout=limite)
+            try:
+                c = await asyncio.wait_for(resolver_componentes(), timeout=limite)
+            except FlujoDetenido:   # p. ej. el servidor de la CIE-11 no respondió al arrancar: se puede reintentar
+                raise ErrorApi("backend", "El servicio de consulta de la CIE-11 no respondió. Puedes intentarlo de nuevo en un momento.",
+                               503, "servicio de consulta no disponible", True) from None
             if c.ocr is not None:
                 original = c.ocr
 

@@ -1,5 +1,6 @@
 """Reporte en Word: Arial 12 pt, interlineado 1.5, títulos en azul sobrio. El nombre de la app va en texto simple."""
 import io
+from datetime import datetime, timezone
 
 from docx import Document
 from docx.enum.text import WD_UNDERLINE
@@ -89,6 +90,10 @@ def _negrita_y_texto(documento, rotulo: str, contenido: str) -> None:
 def generar_docx(reporte: dict) -> bytes:
     reporte = dicc(reporte)
     documento = Document()
+    propiedades = documento.core_properties   # sin esto quedan los datos de la plantilla de python-docx
+    propiedades.title = "Reporte de apoyo al psicodiagnóstico"
+    propiedades.author = propiedades.last_modified_by = comun.NOMBRE_APP
+    propiedades.created = propiedades.modified = datetime.now(timezone.utc).replace(microsecond=0)
     _estilos(documento)
     for seccion in documento.sections:
         seccion.left_margin = seccion.right_margin = Pt(72)
