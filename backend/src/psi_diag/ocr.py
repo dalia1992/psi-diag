@@ -20,7 +20,7 @@ EXTENSIONES_IMAGEN = {".jpg", ".jpeg", ".png"}
 EXTENSIONES = EXTENSIONES_IMAGEN | {".pdf"}
 # El plugin file-parser solo parsea PDF (un JPEG directo responde 200 sin texto). El modelo de chat solo acompaña
 # la petición: su respuesta se ignora y max_tokens bajo evita esperar su generación (spike 2026-10-14).
-MODELO_ACOMPANANTE = "openai/gpt-4o-mini"
+MODELO_ACOMPANANTE = "mistralai/mistral-nemo"
 LADO_MAXIMO_MISTRAL = 2000
 MAX_PAGINAS_PDF = 10
 # Tope de tamaño de una imagen (se lee del encabezado, sin decodificarla): una foto de 12000×12000 px cabe en pocos KB

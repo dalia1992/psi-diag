@@ -27,7 +27,7 @@
       </h1>
       <p class="subtitulo">Asistente de apoyo al psicodiagnóstico</p>
       <p>Describe lo que observaste en consulta, con tus propias palabras, o sube una nota escrita a mano o un PDF. El asistente organiza los síntomas, propone posibles diagnósticos según la CIE-11, señala qué información te falta y reúne guías clínicas relacionadas, todo en un reporte que puedes revisar y descargar.</p>
-      <p>Cuidamos los datos personales: antes de analizar el texto escrito intentamos ocultar los nombres de personas, lugares y organizaciones. La detección automática puede fallar, así que puedes revisar en «Protección de datos personales» el texto que se envió a los servicios externos. Los archivos, en cambio, se leen con servicios externos de reconocimiento de texto (OpenRouter, Mistral y OpenAI) antes de ocultar los datos personales.</p>
+      <p>Cuidamos los datos personales: antes de analizar el texto escrito intentamos ocultar los nombres de personas, lugares y organizaciones. La detección automática puede fallar, así que puedes revisar en «Protección de datos personales» el texto que se envió a los servicios externos. Los archivos, en cambio, se leen con servicios externos de reconocimiento de texto (OpenRouter y Mistral) antes de ocultar los datos personales.</p>
       <p class="aviso">Aviso: Herramienta de apoyo. No sustituye el criterio clínico: las hipótesis son sugerencias para que las valores.</p>
       <div id="bloque-codigo" class="campo" hidden>
         <label for="codigo-acceso">Código de acceso</label>
@@ -54,7 +54,7 @@
 
       <div id="panel-archivo" class="panel" hidden>
         <div id="aclaracion-ocr" class="aviso aviso-ocr">
-          <p><strong>Antes de subir tu archivo.</strong> Para leer una foto o un PDF, el archivo se envía tal como está, <em>antes</em> de ocultar nombres y otros datos personales, a tres servicios externos: OpenRouter (que intermedia el envío), Mistral (que lee el texto) y OpenAI (un modelo auxiliar que acompaña la petición). Pedimos que no guarden ni usen los datos para entrenar, pero no podemos garantizarlo. Si es un caso real, te recomendamos tapar o recortar los datos personales antes de subirlo, o escribir el caso como texto.</p>
+          <p><strong>Antes de subir tu archivo.</strong> Para leer una foto o un PDF, el archivo se envía tal como está, <em>antes</em> de ocultar nombres y otros datos personales, a servicios externos: OpenRouter (que intermedia el envío) y Mistral (que lee el texto; un modelo auxiliar de Mistral acompaña la petición y OpenRouter puede ejecutarlo con otro proveedor de alojamiento). Pedimos que no guarden ni usen los datos para entrenar, pero no podemos garantizarlo. Si es un caso real, te recomendamos tapar o recortar los datos personales antes de subirlo, o escribir el caso como texto.</p>
           <label class="casilla" for="confirma-ocr">
             <input id="confirma-ocr" type="checkbox">
             <span>Entiendo y quiero subir el archivo.</span>
