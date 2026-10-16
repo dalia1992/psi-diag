@@ -200,3 +200,38 @@ def test_sin_guias_ninguna_prueba_lleva_la_marca_de_sin_referencia():
 
 def test_con_lista_de_guias_vacia_tampoco_se_marcan_las_pruebas():
     assert "sin referencia" not in render_markdown(SINTOMAS, [], reporte_base(), [], date(2026, 10, 15), [])
+
+
+def test_construir_datos_tiene_las_claves_del_contrato():
+    from poc_psico.reporte import construir_datos
+
+    guias = [{**GUIA_G1, "tipo": "apa", "cita": "Resumen."}]
+    rep = reporte_base(pruebas=[prueba(fuente_id="G1", cita_textual="el PHQ-9")])
+    finales, _ = validar_hipotesis(rep, CANDIDATOS)
+    d = construir_datos(SINTOMAS, finales, rep, ALTERNATIVAS, date(2026, 10, 15), guias, validar_pruebas(rep.pruebas, guias)[0])
+    assert set(d) == {"fecha", "caso", "sintomas", "hipotesis", "ambiguedades", "diferenciales", "alternativas",
+                      "datos_faltantes", "pruebas", "guias", "aviso"}
+    assert d["fecha"] == "2026-10-15"
+    assert d["caso"] == {"paciente_ref": "[PER_1]", "edad": 34, "sexo": "femenino", "temporalidad": "4 meses"}
+    assert set(d["sintomas"]) == {"cognitivos", "emocionales", "conductuales", "afectacion_social"}
+    assert d["hipotesis"][0] == {
+        "codigo": "6A70", "titulo": CANDIDATOS[0]["titulo"], "url": CANDIDATOS[0]["url"], "justificacion": "Tristeza persistente.",
+        "criterios_cumplidos": ["Ánimo bajo"], "criterios_no_cumplidos": ["Duración no confirmada"]}
+    assert d["alternativas"] == ALTERNATIVAS
+    assert d["ambiguedades"] == ["Podría ser recurrente"] and d["diferenciales"] == ["Descartar trastorno bipolar"]
+    assert d["datos_faltantes"] == ["Antecedentes de episodios previos"]
+    assert d["pruebas"] == [{"nombre": "PHQ-9", "motivo": "Medir severidad",
+                             "guia": {"titulo": "Evaluación de depresión", "url": "https://www.apa.org/e"}, "cita": "el PHQ-9"}]
+    assert d["guias"] == [{"tipo": "apa", "etiqueta": "APA · Evaluación, diagnóstico e intervención",
+                           "titulo": "Evaluación de depresión", "url": "https://www.apa.org/e", "cita": "Resumen."}]
+    assert "No es un diagnóstico" in d["aviso"]
+
+
+def test_pruebas_sin_guia_quedan_con_guia_none():
+    from poc_psico.reporte import construir_datos
+
+    rep = reporte_base()
+    finales, _ = validar_hipotesis(rep, CANDIDATOS)
+    d = construir_datos(SINTOMAS, finales, rep, [], date(2026, 10, 15), None, None)
+    assert d["pruebas"] == [{"nombre": "Inventario de Depresión de Beck", "motivo": "Cuantificar severidad", "guia": None, "cita": ""}]
+    assert d["guias"] == []

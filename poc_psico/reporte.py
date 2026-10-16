@@ -80,6 +80,49 @@ def _linea_prueba(p: dict, hay_guias: bool) -> str:
     return f"{base} · _(sin referencia en las guías consultadas)_" if hay_guias else base
 
 
+AVISO = (
+    "Este reporte contiene hipótesis de apoyo generadas con ayuda de IA a partir de la CIE-11. "
+    "No es un diagnóstico: la decisión clínica es del profesional."
+)
+
+
+def construir_datos(
+    sintomas: dict, hipotesis: list, reporte: ReporteClinico, alternativas: list, fecha: date, guias: list | None = None,
+    pruebas: list | None = None,
+) -> dict:
+    """Reporte estructurado (JSON) con las mismas fuentes y validaciones que el Markdown; lo consumen la web y los exportadores."""
+    if pruebas is None:
+        pruebas, _ = validar_pruebas(reporte.pruebas, guias)
+    return {
+        "fecha": fecha.isoformat(),
+        "caso": {clave: sintomas.get(clave) for clave in ("paciente_ref", "edad", "sexo", "temporalidad")},
+        "sintomas": {clave: list(sintomas.get(clave) or []) for clave in ("cognitivos", "emocionales", "conductuales", "afectacion_social")},
+        "hipotesis": [
+            {clave: h[clave] for clave in ("codigo", "titulo", "url", "justificacion", "criterios_cumplidos", "criterios_no_cumplidos")}
+            for h in hipotesis
+        ],
+        "ambiguedades": list(reporte.ambiguedades),
+        "diferenciales": list(reporte.diferenciales),
+        "alternativas": [{clave: a[clave] for clave in ("codigo", "titulo", "url")} for a in alternativas],
+        "datos_faltantes": list(reporte.datos_faltantes),
+        "pruebas": [
+            {
+                "nombre": p["nombre"], "motivo": p["motivo"],
+                "guia": {"titulo": p["guia"]["titulo"], "url": p["guia"]["url"]} if p["guia"] else None,
+                "cita": p["cita"],
+            }
+            for p in pruebas
+        ],
+        "guias": [
+            {"tipo": tipo, "etiqueta": etiqueta, "titulo": g["titulo"], "url": g["url"], "cita": g.get("cita") or ""}
+            for tipo, etiqueta in ETIQUETAS_GUIAS.items()
+            for g in (guias or [])
+            if g.get("tipo", "apa") == tipo
+        ],
+        "aviso": AVISO,
+    }
+
+
 def render_markdown(
     sintomas: dict, hipotesis: list, reporte: ReporteClinico, alternativas: list, fecha: date, guias: list | None = None,
     pruebas: list | None = None,
@@ -138,6 +181,6 @@ def render_markdown(
                 partes.append("\n".join(f"- [{g['titulo']}]({g['url']})" + (f" — «{g['cita']}»" if g.get("cita") else "") for g in grupo))
     partes += [
         "## 7. Aviso",
-        "Este reporte contiene hipótesis de apoyo generadas con ayuda de IA a partir de la CIE-11. No es un diagnóstico: la decisión clínica es del profesional.",
+        AVISO,
     ]
     return "\n\n".join(partes) + "\n"

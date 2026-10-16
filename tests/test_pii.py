@@ -146,3 +146,14 @@ def test_extender_a_palabra_con_acentos_y_enie():
     t = "Señora Muñoz-Ávila"
     assert extender_a_palabra(t, 9, 11) == (7, 12)
     assert extender_a_palabra("ab cd", 1, 4) == (0, 5)
+
+
+def test_reinsertar_datos_recorre_estructuras_anidadas():
+    mapa = MapaPII()
+    ph = mapa.asignar("PER", "Laura Mendoza")
+    obj = {"a": f"Paciente {ph}", "b": [f"{ph} y [PER_9]", {"c": [f"{ph}"]}], "n": 34, "v": None, "t": (f"{ph}",)}
+    nuevo, desconocidos = mapa.reinsertar_datos(obj)
+    assert nuevo == {"a": "Paciente Laura Mendoza", "b": ["Laura Mendoza y [PER_9]", {"c": ["Laura Mendoza"]}], "n": 34, "v": None,
+                     "t": ["Laura Mendoza"]}
+    assert desconocidos == ["[PER_9]"]
+    assert obj["a"] == f"Paciente {ph}"  # no muta el original

@@ -46,6 +46,23 @@ class MapaPII:
 
         return _PATRON_PLACEHOLDER.sub(_sustituir, texto), desconocidos
 
+    def reinsertar_datos(self, obj):
+        """Reinserta en cada str de una estructura anidada (dict/list/tuple). Devuelve (copia, placeholders sin valor)."""
+        desconocidos = []
+
+        def _recorrer(x):
+            if isinstance(x, str):
+                texto, faltan = self.reinsertar(x)
+                desconocidos.extend(faltan)
+                return texto
+            if isinstance(x, dict):
+                return {k: _recorrer(v) for k, v in x.items()}
+            if isinstance(x, (list, tuple)):
+                return [_recorrer(v) for v in x]
+            return x
+
+        return _recorrer(obj), desconocidos
+
 
 def extender_a_palabra(texto: str, ini: int, fin: int) -> tuple[int, int]:
     """Amplía [ini, fin) hasta los límites de palabra (letras y dígitos, con acentos y ñ)."""

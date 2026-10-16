@@ -75,7 +75,7 @@ async def test_los_nombres_no_llegan_a_ningun_componente_externo_ni_al_resultado
     r = await ejecutar(ENTRADA, c)
     for recibido in espia.recibido:
         assert "Laura" not in recibido and "Mendoza" not in recibido and "Guadalajara" not in recibido
-    sin_reporte = json.dumps({k: v for k, v in r.items() if k != "reporte_md"}, default=str, ensure_ascii=False)
+    sin_reporte = json.dumps({k: v for k, v in r.items() if k not in ("reporte_md", "reporte")}, default=str, ensure_ascii=False)
     assert "Laura" not in sin_reporte and "Guadalajara" not in sin_reporte
     assert "[PER_1]" in espia.recibido[0]  # el guardrail ve el texto anonimizado
 
@@ -285,3 +285,12 @@ async def test_el_redactor_recibe_las_guias_con_id_y_las_pruebas_respaldadas_lle
     assert [x["id"] for x in redactar.recibidas] == ["G1"]
     assert "[Evaluación](https://www.apa.org/e)" in r["reporte_md"]
     assert any("Inventada" in a for a in r["advertencias"])
+
+
+async def test_ejecutar_devuelve_reporte_con_nombres_reinsertados():
+    c, _ = construir()
+    r = await ejecutar(ENTRADA, c)
+    rep = r["reporte"]
+    assert rep["caso"]["paciente_ref"] == "Laura Mendoza" and rep["fecha"] == "2026-10-15"
+    assert rep["hipotesis"][0]["codigo"] == "6A70"
+    assert "[PER_1]" not in json.dumps(rep, ensure_ascii=False)

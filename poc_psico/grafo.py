@@ -13,7 +13,7 @@ from .esquemas import ReporteClinico, SintomasPaciente
 from .guardrail import pasa_guardrail
 from .ocr import es_archivo
 from .pii import MapaPII, anonimizar
-from .reporte import render_markdown, validar_hipotesis, validar_pruebas
+from .reporte import construir_datos, render_markdown, validar_hipotesis, validar_pruebas
 from .traza import contar_errores, contar_rondas, ensamblar_candidatos, extraer_traza, resumen_traza, texto_final
 
 
@@ -30,6 +30,7 @@ class Estado(TypedDict, total=False):
     errores_tools: int
     guias: list
     reporte_md: str
+    reporte_datos: dict
     advertencias: list
 
 
@@ -112,7 +113,10 @@ def construir_workflow(c: Componentes, metricas: dict):
         markdown = render_markdown(
             estado["sintomas"], hipotesis, reporte, estado["alternativas"], c.fecha(), estado.get("guias"), pruebas
         )
-        return {"reporte_md": markdown, "advertencias": estado.get("advertencias", []) + advertencias + adv_pruebas}
+        datos = construir_datos(
+            estado["sintomas"], hipotesis, reporte, estado["alternativas"], c.fecha(), estado.get("guias"), pruebas
+        )
+        return {"reporte_md": markdown, "reporte_datos": datos, "advertencias": estado.get("advertencias", []) + advertencias + adv_pruebas}
 
     grafo = StateGraph(Estado)
     grafo.add_node("guardrail", nodo_guardrail)
@@ -137,7 +141,7 @@ async def ejecutar(entrada: str, c: Componentes) -> dict:
     entrada = str(entrada)
     resultado = {
         "estado_final": "error", "razon": "", "texto_anon": "", "prob_clinico": None, "sintomas": None,
-        "candidatos": [], "alternativas": [], "traza_tools": [], "rondas_busqueda_cie11": 0, "reporte_md": "",
+        "candidatos": [], "alternativas": [], "traza_tools": [], "rondas_busqueda_cie11": 0, "reporte_md": "", "reporte": None,
         "advertencias": [], "latencias": {}, "texto_ocr": None, "guias": [],
     }
     if not entrada or not entrada.strip():
@@ -173,6 +177,7 @@ async def ejecutar(entrada: str, c: Componentes) -> dict:
         return resultado
 
     reporte_md, desconocidos = mapa.reinsertar(final["reporte_md"])
+    reporte, desconocidos_datos = mapa.reinsertar_datos(final["reporte_datos"])
     resultado.update(
         estado_final="ok",
         sintomas=final["sintomas"],
@@ -182,6 +187,7 @@ async def ejecutar(entrada: str, c: Componentes) -> dict:
         traza_tools=final["traza_tools"],
         rondas_busqueda_cie11=final["rondas_busqueda_cie11"],
         reporte_md=reporte_md,
-        advertencias=final.get("advertencias", []) + [f"Placeholder sin valor en el mapa: {p}" for p in desconocidos],
+        reporte=reporte,
+        advertencias=final.get("advertencias", []) + [f"Placeholder sin valor en el mapa: {p}" for p in desconocidos + [d for d in dict.fromkeys(desconocidos_datos) if d not in desconocidos]],
     )
     return resultado
