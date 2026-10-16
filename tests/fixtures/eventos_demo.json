@@ -135,95 +135,7 @@
   "tipo": "resultado",
   "resultado": {
    "estado_final": "ok",
-   "razon": "",
    "razon_amigable": "",
-   "texto_anon": "[PER_1], mujer de 34 años, vive en [LOC_1]. Refiere tristeza casi todos los días y faltas al trabajo desde hace cuatro meses.",
-   "prob_clinico": 0.95,
-   "sintomas": {
-    "paciente_ref": "[PER_1]",
-    "edad": 34,
-    "sexo": "femenino",
-    "cognitivos": [],
-    "emocionales": [
-     "tristeza"
-    ],
-    "conductuales": [],
-    "afectacion_social": [
-     "faltas al trabajo"
-    ],
-    "temporalidad": null,
-    "datos_faltantes": [
-     "Duración de los síntomas"
-    ]
-   },
-   "candidatos": [
-    {
-     "codigo": "6A70",
-     "titulo": "Trastorno depresivo de episodio único",
-     "url": "https://icd.who.int/browse/2024-01/mms/es#1001",
-     "definicion": "Episodio depresivo único de al menos dos semanas.",
-     "inclusiones": [
-      "Depresión mayor de episodio único"
-     ],
-     "exclusiones": []
-    }
-   ],
-   "alternativas": [
-    {
-     "codigo": "6A71",
-     "titulo": "Trastorno depresivo recurrente",
-     "url": "https://icd.who.int/browse/2024-01/mms/es#1002"
-    }
-   ],
-   "traza_tools": [
-    {
-     "herramienta": "icd11_buscar_codigo_mms",
-     "input": {
-      "query": {
-       "termino": "trastorno depresivo"
-      }
-     },
-     "resultado": {
-      "resultados_mms": [
-       {
-        "codigo_oficial": "6A70",
-        "titulo": "Trastorno depresivo de episodio único",
-        "uri_api": "http://id.who.int/icd/release/11/2024-01/mms/1001",
-        "capitulo": "06",
-        "uri_navegable": "https://icd.who.int/browse/2024-01/mms/es#1001"
-       },
-       {
-        "codigo_oficial": "6A71",
-        "titulo": "Trastorno depresivo recurrente",
-        "uri_api": "http://id.who.int/icd/release/11/2024-01/mms/1002",
-        "capitulo": "06",
-        "uri_navegable": "https://icd.who.int/browse/2024-01/mms/es#1002"
-       }
-      ]
-     },
-     "error": false
-    },
-    {
-     "herramienta": "icd11_obtener_criterios_clinicos",
-     "input": {
-      "query": {
-       "uri_entidad": "http://id.who.int/icd/release/11/2024-01/mms/1001"
-      }
-     },
-     "resultado": {
-      "uri": "http://id.who.int/icd/release/11/2024-01/mms/1001",
-      "titulo": "Trastorno depresivo de episodio único",
-      "definicion": "Episodio depresivo único de al menos dos semanas.",
-      "inclusiones": [
-       "Depresión mayor de episodio único"
-      ],
-      "exclusiones": []
-     },
-     "error": false
-    }
-   ],
-   "rondas_busqueda_cie11": 2,
-   "reporte_md": "# Reporte de apoyo al psicodiagnóstico\n\n## 1. Datos del caso\n\n- Paciente: Laura Mendoza\n\n- Edad: 34\n\n- Sexo: femenino\n\n- Temporalidad: No indicada\n\n- Fecha del reporte: 2026-10-15\n\n## 2. Síntomas por categoría\n\n### Cognitivos\n\n- Ninguno identificado\n\n### Emocionales\n\n- Tristeza\n\n### Conductuales\n\n- Ninguno identificado\n\n### Afectación social\n\n- Faltas al trabajo\n\n## 3. Hipótesis diagnósticas (de la más a la menos plausible)\n\n### 1. Trastorno depresivo de episodio único — `6A70`\n\n[Abrir en el navegador OMS](https://icd.who.int/browse/2024-01/mms/es#1001)\n\n**Justificación:** Tristeza persistente con afectación laboral durante cuatro meses.\n\n**Criterios cumplidos:**\n\n- Ánimo deprimido casi todos los días\n\n**Criterios no cumplidos o sin confirmar:**\n\n- Antecedentes de episodios previos sin confirmar\n\n### Ambigüedades\n\n- Podría tratarse de un cuadro recurrente\n\n## 4. Diferenciales y exclusiones\n\n- Descartar trastorno bipolar\n\n### Alternativas consultadas y descartadas\n\n- Trastorno depresivo recurrente (`6A71`) — [OMS](https://icd.who.int/browse/2024-01/mms/es#1002)\n\n## 5. Datos faltantes por recabar\n\n- Antecedentes de episodios previos\n\n## 6. Pruebas complementarias sugeridas\n\n> Sugerencias a validar por el profesional. Solo se indica el nombre de la prueba: no se incluyen cuestionarios ni formas de calificación.\n\n- **Inventario de Depresión de Beck**: Cuantificar la severidad · _(sin referencia en las guías consultadas)_\n\n### Guías clínicas consultadas\n\n> Referencias para consulta del profesional; el sistema no recomienda tratamientos.\n\n**IMSS (México) · Guías de práctica clínica**\n\n- [Guía de práctica clínica: diagnóstico y tratamiento del episodio depresivo](https://www.imss.gob.mx/guias/depresion)\n\n## 7. Aviso\n\nEste reporte contiene hipótesis de apoyo generadas con ayuda de IA a partir de la CIE-11. No es un diagnóstico: la decisión clínica es del profesional.\n",
    "reporte": {
     "fecha": "2026-10-15",
     "caso": {
@@ -294,24 +206,7 @@
    "advertencias": [
     "La prueba Inventario de Depresión de Beck citó la guía G1, que no existe: queda sin referencia"
    ],
-   "latencias": {
-    "ocr": 0.0,
-    "anonimizar": 0.0,
-    "guardrail": 0.0,
-    "extraer": 0.0,
-    "busqueda_cie11": 0.0,
-    "guias": 0.0,
-    "reporte": 0.0
-   },
-   "texto_ocr": "Laura Mendoza, mujer de 34 años, vive en Guadalajara. Refiere tristeza casi todos los días y faltas al trabajo desde hace cuatro meses.",
-   "guias": [
-    {
-     "tipo": "imss",
-     "titulo": "Guía de práctica clínica: diagnóstico y tratamiento del episodio depresivo",
-     "url": "https://www.imss.gob.mx/guias/depresion",
-     "extracto": "Se recomienda aplicar el Inventario de Depresión de Beck para cuantificar la severidad."
-    }
-   ]
+   "texto_ocr": "Laura Mendoza, mujer de 34 años, vive en Guadalajara. Refiere tristeza casi todos los días y faltas al trabajo desde hace cuatro meses."
   }
  }
 ]

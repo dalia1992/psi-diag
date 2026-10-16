@@ -88,7 +88,7 @@ def modo_demo() -> bool:
 
 
 # ----------------------------------------------------------------------------- 1. código de acceso
-MAX_FALLOS_ACCESO = 5
+MAX_FALLOS_ACCESO = 5   # una vez superado, el visitante queda bloqueado (aun con el código correcto) hasta 60 s: es aceptable
 _fallos: dict[str, deque] = defaultdict(deque)   # intentos fallidos de código por visitante, última hora de 60 s
 
 
@@ -210,6 +210,21 @@ async def _entrada_de(formulario) -> tuple[str, str | None, bytes | None, str]:
 
 
 # ----------------------------------------------------------------------------- 4. flujo
+CAMPOS_RESULTADO_CLIENTE = ("estado_final", "razon_amigable", "reporte", "advertencias", "texto_ocr")
+
+
+def resultado_para_cliente(resultado: dict) -> dict:
+    """Lista blanca de lo que ve el navegador. `razon` (mensajes de excepciones, nombres de tools, URLs), la traza,
+    las latencias, los candidatos, etc. se quedan en el servidor: ninguna pantalla los necesita."""
+    return {campo: resultado[campo] for campo in CAMPOS_RESULTADO_CLIENTE if campo in resultado}
+
+
+def evento_para_cliente(evento: dict) -> dict:
+    if evento.get("tipo") == "resultado":
+        return {**evento, "resultado": resultado_para_cliente(evento.get("resultado") or {})}
+    return evento
+
+
 def evento_sse(evento: dict) -> str:
     return f"data: {json.dumps(evento, ensure_ascii=False)}\n\n"
 
@@ -282,7 +297,7 @@ async def transmitir(entrada: str, ruta: Path | None, id_solicitud: str, via: st
                     break
                 if evento.get("tipo") == "resultado":
                     estado = evento["resultado"].get("estado_final", "error")
-                yield evento_sse(evento)
+                yield evento_sse(evento_para_cliente(evento))
         except asyncio.TimeoutError:
             error = ErrorApi("timeout", "El análisis tardó demasiado. Puedes intentarlo de nuevo.", 504, f"sin respuesta en {limite:g} s", True)
             estado = "timeout"
@@ -315,7 +330,7 @@ async def transmitir_demo(id_solicitud: str, via: str) -> AsyncIterator[str]:
     eventos = json.loads(FIXTURE_DEMO.read_text(encoding="utf-8"))
     try:
         for evento in eventos:
-            yield evento_sse(evento)
+            yield evento_sse(evento_para_cliente(evento))
             if pausa > 0:
                 await asyncio.sleep(pausa)
     finally:

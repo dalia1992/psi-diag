@@ -388,3 +388,44 @@ def test_fixture_demo_tiene_siete_pasos_y_las_claves_del_reporte():
     from datetime import date
     esperado = construir_datos({}, [], ReporteClinico(hipotesis=[HipotesisRedactada(codigo="x", justificacion="y")]), [], date(2026, 10, 15), [], [])
     assert set(final["reporte"]) == set(esperado)
+
+
+# ----------------------------------------------------------------------------- lista blanca del resultado
+def _resultado_interno(**sobre):
+    base = {
+        "estado_final": "ok", "razon": "Falló icd11_buscar_codigo_mms en https://cie11-mcp-server.example/sse", "razon_amigable": "Listo.",
+        "texto_anon": "[PER_1] triste", "prob_clinico": 0.9, "sintomas": {"a": 1}, "candidatos": [{"codigo": "6A70"}],
+        "alternativas": [], "traza_tools": [{"herramienta": "icd11_buscar_fundacion"}], "rondas_busqueda_cie11": 2,
+        "reporte_md": "# md", "reporte": {"fecha": "2026-10-15"}, "advertencias": ["aviso"], "latencias": {"ocr": 1.0},
+        "texto_ocr": "texto leído", "guias": [{"url": "https://guias.example/x"}],
+    }
+    base.update(sobre)
+    return base
+
+
+def _con_resultado(monkeypatch, resultado):
+    async def falso(entrada, c):
+        yield {"tipo": "resultado", "resultado": resultado}
+
+    monkeypatch.setattr("poc_psico.grafo.ejecutar_eventos", falso)
+    componentes, _ = construir()
+    monkeypatch.setattr(modulo_app, "componentes_de_prueba", componentes)
+    return TestClient(modulo_app.app).post("/api/caso", data={"texto": ENTRADA})
+
+
+def test_resultado_al_cliente_solo_tiene_campos_permitidos(monkeypatch):
+    r = _con_resultado(monkeypatch, _resultado_interno())
+    for prohibido in ("icd11_", "cie11-mcp-server", "guias.example", "traza_tools", "latencias", "prob_clinico", "candidatos", "texto_anon", "reporte_md", "rondas_busqueda"):
+        assert prohibido not in r.text
+    assert set(eventos_de(r)[-1]["resultado"]) <= {"estado_final", "razon_amigable", "reporte", "advertencias", "texto_ocr"}
+
+
+def test_resultado_ok_conserva_reporte_y_advertencias(monkeypatch):
+    resultado = eventos_de(_con_resultado(monkeypatch, _resultado_interno()))[-1]["resultado"]
+    assert resultado["reporte"] == {"fecha": "2026-10-15"} and resultado["advertencias"] == ["aviso"]
+
+
+def test_resultado_de_error_conserva_razon_amigable(monkeypatch):
+    resultado = eventos_de(_con_resultado(monkeypatch, _resultado_interno(estado_final="error", razon_amigable="No se pudo completar.", reporte=None)))[-1]["resultado"]
+    assert resultado["estado_final"] == "error" and resultado["razon_amigable"] == "No se pudo completar."
+    assert "razon" not in resultado
