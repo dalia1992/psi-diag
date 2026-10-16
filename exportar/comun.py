@@ -9,7 +9,7 @@ ETIQUETAS_SINTOMAS = (
     ("Cognitivos", "cognitivos"), ("Emocionales", "emocionales"),
     ("Conductuales", "conductuales"), ("Afectación social", "afectacion_social"),
 )
-_CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f￾￿]")   # XML 1.0 no admite estos caracteres
+_CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\ufffe\uffff\ud800-\udfff]")   # XML 1.0 no admite los de control; los sustitutos UTF-16 sueltos no se pueden codificar
 _URL = re.compile(r"^https?://[^\s\"'<>\\]{1,2000}$", re.IGNORECASE)
 
 

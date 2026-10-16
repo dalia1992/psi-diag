@@ -281,3 +281,38 @@ def test_api_no_registra_el_contenido_del_reporte(cliente, caplog):
     assert "NOMBRE-SECRETO-XYZ" not in salida and "Laura" not in salida
     linea = json.loads(caplog.messages[-1])
     assert linea["formato"] == "pdf" and set(linea) == {"id", "formato", "ms", "estado"}
+
+
+# ----------------------------------------------------------------------------- sustitutos UTF-16 sueltos
+def reporte_con_sustitutos() -> dict:
+    s = "\ud800"
+    r = reporte_completo()
+    r["fecha"] = f"2026-10-15{s}"
+    r["caso"]["paciente_ref"] = f"Ana{s}"
+    r["sintomas"]["emocionales"] = [f"{s}tristeza", s]
+    r["hipotesis"][0].update(titulo=f"T{s}", codigo=f"6A{s}", justificacion=f"j{s}\udfff",
+                             criterios_cumplidos=[f"c{s}"], criterios_no_cumplidos=[s + "x"])
+    r["hipotesis"][0]["url"] = f"https://icd.who.int/{s}"
+    r["ambiguedades"], r["diferenciales"], r["datos_faltantes"] = [f"a{s}"], [f"d{s}"], [f"f{s}"]
+    r["pruebas"][0].update(nombre=f"p{s}", motivo=f"m{s}", cita=f"c{s}")
+    r["pruebas"][-1]["guia"]["titulo"] = f"g{s}"
+    r["guias"][0].update(etiqueta=f"e{s}", titulo=f"t{s}", cita=f"c{s}")
+    r["aviso"] = f"aviso{s}"
+    return r
+
+
+@pytest.mark.parametrize("formato", ["docx", "pdf"])
+def test_exportadores_aceptan_sustitutos_utf16_sueltos(formato):
+    if formato == "docx":
+        Document(io.BytesIO(generar_docx(reporte_con_sustitutos())))
+    else:
+        assert PdfReader(io.BytesIO(generar_pdf(reporte_con_sustitutos()))).pages
+
+
+@pytest.mark.parametrize("formato", ["docx", "pdf"])
+def test_api_acepta_sustitutos_utf16_sueltos(cliente, formato):
+    cuerpo = json.dumps(reporte_con_sustitutos())   # ensure_ascii deja «\ud800» escapado: json.loads lo acepta
+    r = cliente.post(f"/api/exportar/{formato}", content=cuerpo, headers={"content-type": "application/json"})
+    assert r.status_code == 200
+    assert r.headers["content-disposition"] == f'attachment; filename="reporte-2026-10-15.{formato}"'
+    Document(io.BytesIO(r.content)) if formato == "docx" else PdfReader(io.BytesIO(r.content)).pages
