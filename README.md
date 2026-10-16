@@ -1,7 +1,70 @@
 # MVP psicodiagnóstico
 
-Apoyo al psicodiagnóstico (fase 1): backend FastAPI reutilizando el PoC `poc_psico/`, desplegable en Vercel.
-Para correr las pruebas: `uv pip install -r requirements-dev.txt && pytest -q` (copia `.env.example` a `.env` para uso local; nunca subas `.env`).
+Herramienta de apoyo al psicodiagnóstico (fase 1). Una persona describe un caso (texto, foto o PDF); la app lo anonimiza,
+busca criterios en la CIE-11 y en guías clínicas, y produce un reporte con hipótesis diagnósticas que se puede descargar
+en Word o PDF. Es un apoyo para la o el profesional: no sustituye su criterio. Backend FastAPI (`app.py`) que reutiliza el
+PoC `poc_psico/`, pantalla web estática en `public/`, pensada para desplegarse en Vercel.
+
+## Correr en local
+
+1. Crea un entorno virtual **fuera de Google Drive** e instala las dependencias:
+
+```bash
+uv venv ~/.venvs/mvp_psico --python 3.12
+```
+
+```bash
+uv pip install --python ~/.venvs/mvp_psico/bin/python -r requirements-dev.txt
+```
+
+2. Crea un archivo de entorno en `~/.config/mvp_psico/env` (fuera del repositorio) con `OPENROUTER_API_KEY` y `ACCESS_CODE`
+   (usa un código distinto al de producción). Nunca subas claves a git; `.env.example` es solo una plantilla.
+3. Arranca:
+
+```bash
+~/.venvs/mvp_psico/bin/uvicorn app:app --port 8000 --env-file ~/.config/mvp_psico/env
+```
+
+y abre http://localhost:8000. Sin servicios de pago, para ver solo la interfaz con un caso de demostración: arranca con `MODO_DEMO=1`
+(solo funciona fuera de Vercel).
+
+Variables de entorno: `OPENROUTER_API_KEY` (obligatoria), `ACCESS_CODE` (obligatoria en Vercel), y opcionales `MODEL_ID`,
+`MAX_POR_MINUTO`, `BACKEND_TIMEOUT_S`, `AGENT_MCP_URL`. Detalle en [DESPLIEGUE.md](DESPLIEGUE.md).
+
+## Pruebas
+
+```bash
+pytest
+```
+
+```bash
+node --test public/sse.test.mjs
+```
+
+Prueba de punta a punta contra un servidor en marcha: `python scripts/probar_caso.py URL --texto "..." --env-file ARCHIVO`.
+
+## Estructura
+
+- `app.py`: API (`/api/health`, `/api/caso` por SSE, `/api/exportar/{docx|pdf}`); en local también sirve `public/`.
+- `componentes.py`, `errores_api.py`: armado de componentes y errores de la API.
+- `poc_psico/`: flujo de análisis (OCR, anonimización, extracción, CIE-11, guías, reporte).
+- `exportar/`: generación de Word y PDF.
+- `public/`: pantalla web (HTML, JS, CSS, fuentes). En Vercel la sirve la CDN.
+- `models/ner/`: modelo ONNX de anonimización (partido en dos). `assets/fonts/`: fuentes del PDF.
+- `scripts/`: utilidades (exportar el modelo, preparar fuentes, `probar_caso.py`). `tests/`: pruebas.
+- `vercel.json`, `.python-version`, `requirements.txt`: configuración de despliegue.
+
+## Límites conocidos
+
+- Nombres en minúsculas dentro de texto libre pueden escapar de la anonimización (detalle abajo).
+- La fuente Nunito no tiene la Ψ ni emoji; se usan imágenes o alternativas.
+- Al subir foto o PDF, el archivo **original** se envía a un servicio externo de OCR antes de anonimizar; la pantalla lo avisa.
+- Vercel Hobby es solo para uso personal no comercial; con casos reales de otras colegas hace falta el plan Pro.
+- La primera solicitud tras un rato sin uso puede ser lenta; un caso completo tarda de 1 a 3 minutos (corte a los 280 s).
+
+## Despliegue
+
+Guía paso a paso en [DESPLIEGUE.md](DESPLIEGUE.md).
 
 ## NER de anonimización (ONNX)
 
