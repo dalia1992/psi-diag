@@ -1,0 +1,15 @@
+{
+  "tool": "icd11_buscar_sintomas_y_signos",
+  "args": {
+    "query": {
+      "termino": "tristeza"
+    }
+  },
+  "content": [
+    {
+      "type": "text",
+      "text": "{\n  \"resultados_sintomatologia\": [\n    {\n      \"manifestacion\": \"Funciones emocionales\",\n      \"uri\": \"http://id.who.int/icd/entity/668868854\",\n      \"capitulo\": \"V\",\n      \"coincidencia\": 1\n    },\n    {\n      \"manifestacion\": \"Depresión posparto SAI\",\n      \"uri\": \"http://id.who.int/icd/entity/169328648\",\n      \"capitulo\": \"06\",\n      \"coincidencia\": -0.3218603980148806\n    }\n  ]\n}",
+      "id": "lc_5209f609-45c4-4151-aa48-33d13d6a2311"
+    }
+  ]
+}

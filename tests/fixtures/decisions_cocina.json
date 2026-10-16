@@ -1,0 +1,16 @@
+{
+  "model": "typesafe/jev-1.14-20261014",
+  "answers": {
+    "es_clinico": {
+      "type": "noul",
+      "noul": 0.02
+    }
+  },
+  "usage": {
+    "input_tokens": 315,
+    "output_tokens": 23,
+    "cost": 1.323e-05
+  },
+  "id": "gen-dec-1792118546-ObWMUbNctMntrPNnUsXd",
+  "provider": "TypeSafe"
+}

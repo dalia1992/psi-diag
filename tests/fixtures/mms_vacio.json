@@ -1,0 +1,15 @@
+{
+  "tool": "icd11_buscar_codigo_mms",
+  "args": {
+    "query": {
+      "termino": "zzzxqwv"
+    }
+  },
+  "content": [
+    {
+      "type": "text",
+      "text": "{\n  \"resultados_mms\": []\n}",
+      "id": "lc_4172c6e3-e72e-473e-ac3d-d707351a4ce3"
+    }
+  ]
+}

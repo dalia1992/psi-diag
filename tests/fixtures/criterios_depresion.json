@@ -1,0 +1,15 @@
+{
+  "tool": "icd11_obtener_criterios_clinicos",
+  "args": {
+    "query": {
+      "uri_entidad": "http://id.who.int/icd/release/11/2024-01/mms/1563440232/unspecified"
+    }
+  },
+  "content": [
+    {
+      "type": "text",
+      "text": "{\n  \"uri\": \"http://id.who.int/icd/release/11/2024-01/mms/1563440232/unspecified\",\n  \"titulo\": \"Trastornos depresivos, sin especificación\",\n  \"definicion\": \"Sin definición formal disponible.\",\n  \"inclusiones\": [],\n  \"exclusiones\": []\n}",
+      "id": "lc_318a20fd-fb8a-4dd7-ae26-70cc399922b8"
+    }
+  ]
+}
