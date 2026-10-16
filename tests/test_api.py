@@ -473,3 +473,60 @@ async def test_los_avisos_que_llegan_al_cliente_son_frases_fijas_sin_detalle_int
     avisos = json.dumps(enviado["advertencias"], ensure_ascii=False).lower()   # el reporte sí lleva ligas de la OMS y su texto
     for prohibido in ("tool", "placeholder", "g3", "http", "9z99", "per_9"):
         assert prohibido not in avisos, prohibido
+
+
+# ----------------------------------------------------------------------------- bombas de descompresión
+def _png_de(ancho: int, alto: int) -> bytes:
+    from PIL import Image
+    salida = io.BytesIO()
+    Image.new("L", (ancho, alto), 255).save(salida, "PNG")
+    return salida.getvalue()
+
+
+def test_png_gigante_pero_pequeno_en_disco_se_rechaza_por_su_encabezado_sin_decodificarlo(cliente, monkeypatch):
+    from PIL import ImageFile
+
+    bomba = _png_de(12000, 12000)
+    assert len(bomba) < 4_000_000   # pasa el tope de bytes: solo las dimensiones la delatan
+
+    def prohibido(*a, **k):
+        raise AssertionError("la imagen se decodificó completa")
+
+    monkeypatch.setattr(ImageFile.ImageFile, "load", prohibido)
+    r = cliente.post("/api/caso", data={"confirma_ocr": "true"}, files={"archivo": ("caso.png", bomba, "image/png")})
+    assert r.status_code == 400
+    assert r.json()["error"]["codigo"] == "archivo"
+    assert "demasiado grande" in r.json()["error"]["mensaje"]
+
+
+def test_imagen_con_un_lado_mayor_a_8000_px_se_rechaza(cliente):
+    r = cliente.post("/api/caso", data={"confirma_ocr": "true"}, files={"archivo": ("caso.png", _png_de(8001, 100), "image/png")})
+    assert r.status_code == 400 and r.json()["error"]["codigo"] == "archivo"
+
+
+def test_imagen_normal_de_3000_por_1500_sigue_pasando(monkeypatch):
+    componentes, _ = construir(ocr=lambda ruta: ENTRADA)
+    monkeypatch.setattr(modulo_app, "componentes_de_prueba", componentes)
+    r = TestClient(modulo_app.app).post("/api/caso", data={"confirma_ocr": "true"}, files={"archivo": ("caso.png", _png_de(3000, 1500), "image/png")})
+    assert r.status_code == 200
+    assert eventos_de(r)[-1]["resultado"]["estado_final"] == "ok"
+
+
+async def test_la_validacion_del_archivo_corre_fuera_del_hilo_del_bucle(monkeypatch):
+    hilos = []
+    original = modulo_app._validar_archivo
+
+    def espia(nombre, datos):
+        hilos.append(threading.current_thread())
+        return original(nombre, datos)
+
+    monkeypatch.setattr(modulo_app, "_validar_archivo", espia)
+
+    class Archivo:
+        filename = "caso.png"
+
+        async def read(self, n):
+            return png_valido()
+
+    await modulo_app._entrada_de({"archivo": Archivo(), "confirma_ocr": "true"})
+    assert hilos and hilos[0] is not threading.main_thread()

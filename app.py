@@ -164,8 +164,15 @@ def _validar_archivo(nombre: str, datos: bytes) -> str:
             paginas = len(lector.pages)
         else:
             from PIL import Image
-            with Image.open(io.BytesIO(datos)) as imagen:
-                imagen.verify()
+            from poc_psico.ocr import ERRORES_BOMBA, bomba_como_error, dimensiones_aceptables, MENSAJE_IMAGEN_GRANDE
+            try:
+                with bomba_como_error(), Image.open(io.BytesIO(datos)) as imagen:
+                    ancho, alto = imagen.size   # solo el encabezado: una imagen enorme no se decodifica nunca
+                    if not dimensiones_aceptables(ancho, alto):
+                        raise ErrorApi("archivo", MENSAJE_IMAGEN_GRANDE, 400, f"imagen de {ancho}x{alto} px")
+                    imagen.verify()
+            except ERRORES_BOMBA:
+                raise ErrorApi("archivo", MENSAJE_IMAGEN_GRANDE, 400, "imagen con demasiados píxeles") from None
             paginas = 1
     except ErrorApi:
         raise
@@ -202,7 +209,7 @@ async def _entrada_de(formulario) -> tuple[str, str | None, bytes | None, str]:
         if str(formulario.get("confirma_ocr", "")).strip().lower() != "true":
             raise ErrorApi("ocr", "Confirma que aceptas que el archivo se lea con un servicio externo (OCR).", 400, "falta confirma_ocr=true")
         datos = await archivo.read(MAX_BYTES_ARCHIVO + 1)
-        extension = _validar_archivo(archivo.filename or "", datos)
+        extension = await asyncio.to_thread(_validar_archivo, archivo.filename or "", datos)   # pypdf y Pillow son síncronos
         return "archivo", None, datos, extension
     if not tiene_texto:
         raise ErrorApi("validacion", "Escribe el caso o sube un archivo.", 400, "falta texto o archivo")

@@ -4,6 +4,8 @@ import io
 import pathlib
 import re
 import time
+import warnings
+from contextlib import contextmanager
 
 import requests
 from PIL import Image, UnidentifiedImageError
@@ -21,10 +23,31 @@ EXTENSIONES = EXTENSIONES_IMAGEN | {".pdf"}
 MODELO_ACOMPANANTE = "openai/gpt-4o-mini"
 LADO_MAXIMO_MISTRAL = 2000
 MAX_PAGINAS_PDF = 10
+# Tope de tamaño de una imagen (se lee del encabezado, sin decodificarla): una foto de 12000×12000 px cabe en pocos KB
+# comprimida y ocuparía casi 1 GB al decodificarla, en una instancia que comparte memoria con otras solicitudes.
+MAX_PIXELES = 40_000_000
+MAX_LADO = 8000
+Image.MAX_IMAGE_PIXELS = MAX_PIXELES   # Pillow avisa por encima de este valor y falla por encima del doble
+MENSAJE_IMAGEN_GRANDE = "La imagen es demasiado grande (máximo 40 megapíxeles y 8000 píxeles por lado). Reduce su tamaño e inténtalo de nuevo."
 
 
 class OcrError(FlujoDetenido):
     """No se pudo leer el archivo; el flujo no continúa con texto inventado o incompleto."""
+
+
+def dimensiones_aceptables(ancho: int, alto: int) -> bool:
+    return ancho * alto <= MAX_PIXELES and max(ancho, alto) <= MAX_LADO
+
+
+@contextmanager
+def bomba_como_error():
+    """Dentro del bloque, el aviso de «posible bomba de descompresión» de Pillow es una excepción (no solo un aviso)."""
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", Image.DecompressionBombWarning)
+        yield
+
+
+ERRORES_BOMBA = (Image.DecompressionBombError, Image.DecompressionBombWarning)
 
 
 def es_archivo(entrada) -> bool:
@@ -45,8 +68,14 @@ def _base64(datos: bytes) -> str:
 def _cargar(ruta: pathlib.Path, lado: int) -> Image.Image:
     _exigir_archivo(ruta)
     try:
-        with Image.open(ruta) as original:
+        with bomba_como_error(), Image.open(ruta) as original:
+            if not dimensiones_aceptables(*original.size):   # solo el encabezado: nada se ha decodificado todavía
+                raise OcrError(f"{ruta.name}: {MENSAJE_IMAGEN_GRANDE}")
+            if original.format == "JPEG":
+                original.draft("RGB", (lado, lado))   # el decodificador JPEG reduce por 2, 4 u 8 mientras lee
             imagen = original.convert("RGB")  # descarta la transparencia de los PNG
+    except ERRORES_BOMBA as e:
+        raise OcrError(f"{ruta.name}: {MENSAJE_IMAGEN_GRANDE}") from e
     except (UnidentifiedImageError, OSError) as e:
         raise OcrError(f"No se pudo abrir {ruta.name} como imagen: {e}") from e
     imagen.thumbnail((lado, lado))

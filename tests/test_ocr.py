@@ -171,3 +171,42 @@ def test_mistral_rechaza_un_pdf_con_mas_paginas_que_el_maximo_sin_llamar(tmp_pat
 
     with pytest.raises(OcrError, match=f"el máximo es {MAX_PAGINAS_PDF}"):
         leer_archivo_mistral(_pdf_de(MAX_PAGINAS_PDF + 1, tmp_path), "k", post=post)
+
+
+def test_ocr_rechaza_una_imagen_con_demasiados_pixeles_sin_decodificarla(tmp_path, monkeypatch):
+    from PIL import ImageFile
+
+    ruta = tmp_path / "bomba.png"
+    Image.new("L", (12000, 12000), 255).save(ruta)
+
+    def prohibido(*a, **k):
+        raise AssertionError("la imagen se decodificó completa")
+
+    monkeypatch.setattr(ImageFile.ImageFile, "load", prohibido)
+    with pytest.raises(OcrError, match="demasiado grande"):
+        leer_archivo_mistral(ruta, "k", post=lambda *a, **k: anotada("x"))
+
+
+def test_una_advertencia_de_bomba_de_pillow_se_vuelve_un_ocr_error_limpio(tmp_path, monkeypatch):
+    ruta = tmp_path / "nota.png"
+    Image.new("RGB", (40, 40), "white").save(ruta)
+    monkeypatch.setattr(Image, "MAX_IMAGE_PIXELS", 1000)   # 1600 px: Pillow solo avisa
+    with pytest.raises(OcrError, match="demasiado grande"):
+        leer_archivo_mistral(ruta, "k", post=lambda *a, **k: anotada("x"))
+
+
+def test_el_limite_global_de_pixeles_de_pillow_queda_ajustado():
+    from poc_psico.ocr import MAX_PIXELES
+    assert Image.MAX_IMAGE_PIXELS == MAX_PIXELES == 40_000_000
+
+
+def test_un_jpeg_grande_se_reduce_con_draft_antes_de_decodificarlo(tmp_path, monkeypatch):
+    ruta = tmp_path / "foto.jpg"
+    Image.new("RGB", (6000, 4000), "white").save(ruta)
+    llamadas = []
+    from PIL.JpegImagePlugin import JpegImageFile
+
+    original = JpegImageFile.draft
+    monkeypatch.setattr(JpegImageFile, "draft", lambda self, modo, tam: llamadas.append(tam) or original(self, modo, tam))
+    assert leer_archivo_mistral(ruta, "k", post=lambda *a, **k: anotada("hola")) == "hola"
+    assert llamadas and llamadas[0] == (2000, 2000)
