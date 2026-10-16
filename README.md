@@ -7,7 +7,7 @@ PoC `poc_psico/`, pantalla web estática en `public/`, pensada para desplegarse 
 
 ## Correr en local
 
-1. Crea un entorno virtual **fuera de Google Drive** e instala las dependencias:
+1. Crea un entorno virtual **fuera de Google Drive** (si usas otra ruta, cámbiala en los comandos siguientes) e instala las dependencias:
 
 ```bash
 uv venv ~/.venvs/mvp_psico --python 3.12
@@ -25,7 +25,7 @@ uv pip install --python ~/.venvs/mvp_psico/bin/python -r requirements-dev.txt
 ~/.venvs/mvp_psico/bin/uvicorn app:app --port 8000 --env-file ~/.config/mvp_psico/env
 ```
 
-y abre http://localhost:8000. Sin servicios de pago, para ver solo la interfaz con un caso de demostración: arranca con `MODO_DEMO=1`
+y abre http://localhost:8000 (`uvicorn` está en el entorno virtual: si no lo tienes activado, usa la ruta completa de arriba). Sin servicios de pago, para ver solo la interfaz con un caso de demostración: arranca con `MODO_DEMO=1`
 (solo funciona fuera de Vercel).
 
 Variables de entorno: `OPENROUTER_API_KEY` (obligatoria), `ACCESS_CODE` (obligatoria en Vercel), y opcionales `MODEL_ID`,
@@ -34,14 +34,14 @@ Variables de entorno: `OPENROUTER_API_KEY` (obligatoria), `ACCESS_CODE` (obligat
 ## Pruebas
 
 ```bash
-pytest
+~/.venvs/mvp_psico/bin/python -m pytest
 ```
 
 ```bash
 node --test public/sse.test.mjs
 ```
 
-Prueba de punta a punta contra un servidor en marcha: `python scripts/probar_caso.py URL --texto "..." --env-file ARCHIVO`.
+Prueba de punta a punta contra un servidor en marcha: `~/.venvs/mvp_psico/bin/python scripts/probar_caso.py URL --texto "..." --env-file ARCHIVO`.
 
 ## Estructura
 
