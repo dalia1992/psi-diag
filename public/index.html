@@ -22,7 +22,7 @@
 
     <!-- 1. Inicio -->
     <section id="pantalla-inicio" aria-labelledby="titulo-inicio">
-      <h1 id="titulo-inicio" class="titulo-grande" aria-label="Ψ-DIAG con IA">
+      <h1 id="titulo-inicio" class="titulo-grande" tabindex="-1" aria-label="Ψ-DIAG con IA">
         <img class="marca-psi marca-psi-grande" src="/psi.svg" alt="" width="44" height="44"><span>-DIAG con <mark class="ia">IA</mark></span>
       </h1>
       <p class="subtitulo">Asistente de apoyo al psicodiagnóstico</p>
@@ -39,7 +39,7 @@
 
     <!-- 2. Nuevo caso -->
     <section id="pantalla-nuevo" aria-labelledby="titulo-nuevo" hidden>
-      <h2 id="titulo-nuevo" class="titulo-seccion">¿Qué quieres compartir?</h2>
+      <h2 id="titulo-nuevo" class="titulo-seccion" tabindex="-1">¿Qué quieres compartir?</h2>
       <p class="apoyo">Puedes escribir libremente o subir un archivo.</p>
       <div class="opciones" role="group" aria-label="Forma de compartir el caso">
         <button id="opcion-texto" type="button" class="boton boton-opcion" aria-pressed="true">Escribir texto</button>
@@ -48,7 +48,7 @@
 
       <div id="panel-texto" class="panel">
         <label for="texto-caso" class="visible-lector">Texto del caso</label>
-        <textarea id="texto-caso" rows="9" maxlength="8000" placeholder="Cuéntame lo que observaste: motivo de consulta, síntomas, desde cuándo, contexto…" aria-describedby="contador-texto"></textarea>
+        <textarea id="texto-caso" rows="9" maxlength="8000" autocomplete="off" placeholder="Cuéntame lo que observaste: motivo de consulta, síntomas, desde cuándo, contexto…" aria-describedby="contador-texto"></textarea>
         <p id="contador-texto" class="apoyo contador">0 de 8000 caracteres (mínimo 20)</p>
       </div>
 
@@ -100,6 +100,7 @@
         <button id="boton-nuevo" type="button" class="boton boton-suave">Nuevo caso</button>
       </div>
       <p id="mensaje-reporte" class="mensaje" role="alert" hidden></p>
+      <p class="apoyo">Herramienta de apoyo: no sustituye el criterio clínico.</p>
       <div id="cuerpo-reporte"></div>
       <p class="aviso aviso-pie">Aviso: Herramienta de apoyo. No sustituye el criterio clínico: las hipótesis son sugerencias para que las valores.</p>
     </section>

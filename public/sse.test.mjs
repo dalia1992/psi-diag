@@ -61,3 +61,8 @@ test("fin_con_evento_error_devuelve_ese_error", () => {
   assert.equal(r.error.mensaje, "Tardó demasiado.");
   assert.equal(r.error.reintentable, true);
 });
+
+test("ignora_eventos_que_no_son_objetos", () => {
+  const { eventos } = parsearSSE('data: null\n\ndata: 5\n\ndata: "x"\n\ndata: [1]\n\ndata: {"n":1}\n\n');
+  assert.deepEqual(eventos, [{ n: 1 }]);
+});

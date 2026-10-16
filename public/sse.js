@@ -19,7 +19,8 @@ export function parsearSSE(buffer) {
     }
     if (datos.length === 0) continue;
     try {
-      eventos.push(JSON.parse(datos.join("\n")));
+      const evento = JSON.parse(datos.join("\n"));
+      if (evento && typeof evento === "object" && !Array.isArray(evento)) eventos.push(evento);
     } catch {
       // línea dañada: se omite
     }

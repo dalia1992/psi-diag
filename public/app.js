@@ -95,7 +95,7 @@ const PANTALLAS = ["inicio", "nuevo", "avance", "reporte"];
 function irA(nombre) {
   for (const p of PANTALLAS) $(`pantalla-${p}`).hidden = p !== nombre;
   window.scrollTo(0, 0);
-  const titulo = { nuevo: "titulo-nuevo", avance: "titulo-avance", reporte: "titulo-reporte" }[nombre];
+  const titulo = { inicio: "titulo-inicio", nuevo: "titulo-nuevo", avance: "titulo-avance", reporte: "titulo-reporte" }[nombre];
   if (titulo) $(titulo).focus({ preventScroll: true });
 }
 
@@ -189,7 +189,10 @@ export async function reducirImagen(archivo, ladoMax = 2000, calidad = 0.85) {
   }
 }
 
+let turnoArchivo = 0;
+
 async function elegirArchivo() {
+  const turno = ++turnoArchivo; // una elección más reciente invalida a la anterior
   estado.archivo = null;
   mostrarMensaje($("mensaje-nuevo"), "");
   actualizarBotonGenerar();
@@ -212,7 +215,9 @@ async function elegirArchivo() {
     let reducida;
     try {
       reducida = await reducirImagen(archivo);
+      if (turno !== turnoArchivo) return;
     } catch {
+      if (turno !== turnoArchivo) return;
       mostrarMensaje($("mensaje-nuevo"), "No se pudo leer la foto. Prueba con otra o escribe el caso como texto.");
       return;
     }
@@ -284,7 +289,7 @@ function aplicarPaso(ev) {
     if (ev.id === "lectura") $("aviso-ocr-avance").hidden = true;
     if (ev.detalle && !fila.li.querySelector("details")) {
       fila.li.appendChild(detallesDelPaso(ev.detalle));
-      estado.pasos.push({ titulo: nombre, resumen: ev.detalle.resumen || "", lineas: ev.detalle.lineas || [] });
+      estado.pasos.push({ titulo: nombre, resumen: ev.detalle.resumen || "", lineas: Array.isArray(ev.detalle.lineas) ? ev.detalle.lineas.map(String) : [] });
     }
   }
 }
@@ -624,7 +629,6 @@ function dibujarReporte(reporte, advertencias) {
     cuerpo.appendChild(s);
   }
 
-  if (reporte.aviso) cuerpo.appendChild(el("p", "aviso", reporte.aviso));
 }
 
 // ----------------------------------------------------------------------------- descargas
