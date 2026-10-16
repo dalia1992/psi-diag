@@ -448,3 +448,27 @@ async def exportar(formato: str, request: Request):
         return responder(respuesta_error(ErrorApi("backend", "No se pudo generar el archivo.", 500, type(e).__name__), id_solicitud, BACKEND), 500)
     finally:
         registrar(id=id_solicitud, formato=formato if formato in FORMATOS_EXPORTAR else "otro", ms=milisegundos(inicio), estado=estado)
+
+
+# ----------------------------------------------------------------------------- pantalla (solo en local)
+# En Vercel, public/ lo sirve la plataforma con las cabeceras de vercel.json. En local se sirve igual, con esas mismas
+# cabeceras, para que la CSP se pruebe tal como quedará en producción.
+if not en_vercel():
+    from starlette.staticfiles import StaticFiles
+
+    _VERCEL_JSON = Path(__file__).parent / "vercel.json"
+
+    @app.middleware("http")
+    async def cabeceras_locales(request: Request, call_next):
+        respuesta = await call_next(request)
+        if not request.url.path.startswith("/api/"):
+            try:
+                reglas = json.loads(_VERCEL_JSON.read_text(encoding="utf-8")).get("headers", [])
+                for regla in reglas:
+                    for cabecera in regla.get("headers", []):
+                        respuesta.headers[cabecera["key"]] = cabecera["value"]
+            except (OSError, ValueError, KeyError):
+                pass
+        return respuesta
+
+    app.mount("/", StaticFiles(directory=Path(__file__).parent / "public", html=True), name="pantalla")

@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ψ-DIAG con IA</title>
+  <meta name="description" content="Asistente de apoyo al psicodiagnóstico: organiza síntomas, propone hipótesis según la CIE-11 y reúne guías clínicas.">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/estilos.css">
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <header class="encabezado">
+    <div class="contenedor">
+      <a class="marca" href="/" aria-label="Ψ-DIAG con IA">
+        <img class="marca-psi" src="/psi.svg" alt="" width="28" height="28"><span class="marca-texto">-DIAG con <mark class="ia">IA</mark></span>
+      </a>
+    </div>
+  </header>
+
+  <main class="contenedor" id="contenido">
+
+    <!-- 1. Inicio -->
+    <section id="pantalla-inicio" aria-labelledby="titulo-inicio">
+      <h1 id="titulo-inicio" class="titulo-grande" aria-label="Ψ-DIAG con IA">
+        <img class="marca-psi marca-psi-grande" src="/psi.svg" alt="" width="44" height="44"><span>-DIAG con <mark class="ia">IA</mark></span>
+      </h1>
+      <p class="subtitulo">Asistente de apoyo al psicodiagnóstico</p>
+      <p>Describe lo que observaste en consulta, con tus propias palabras, o sube una nota escrita a mano o un PDF. El asistente organiza los síntomas, propone posibles diagnósticos según la CIE-11, señala qué información te falta y reúne guías clínicas relacionadas, todo en un reporte que puedes revisar y descargar.</p>
+      <p>Cuidamos los datos personales: los nombres de personas, lugares y organizaciones del texto escrito se ocultan antes de analizarlo. Los archivos, en cambio, se leen con un servicio externo de reconocimiento de texto antes de ocultar los datos personales.</p>
+      <p class="aviso">Aviso: Herramienta de apoyo. No sustituye el criterio clínico: las hipótesis son sugerencias para que las valores.</p>
+      <div id="bloque-codigo" class="campo" hidden>
+        <label for="codigo-acceso">Código de acceso</label>
+        <input id="codigo-acceso" type="password" autocomplete="off" spellcheck="false">
+      </div>
+      <p id="mensaje-inicio" class="mensaje" role="alert" hidden></p>
+      <button id="boton-iniciar" type="button" class="boton">Iniciar</button>
+    </section>
+
+    <!-- 2. Nuevo caso -->
+    <section id="pantalla-nuevo" aria-labelledby="titulo-nuevo" hidden>
+      <h2 id="titulo-nuevo" class="titulo-seccion">¿Qué quieres compartir?</h2>
+      <p class="apoyo">Puedes escribir libremente o subir un archivo.</p>
+      <div class="opciones" role="group" aria-label="Forma de compartir el caso">
+        <button id="opcion-texto" type="button" class="boton boton-opcion" aria-pressed="true">Escribir texto</button>
+        <button id="opcion-archivo" type="button" class="boton boton-opcion" aria-pressed="false">Subir archivo</button>
+      </div>
+
+      <div id="panel-texto" class="panel">
+        <label for="texto-caso" class="visible-lector">Texto del caso</label>
+        <textarea id="texto-caso" rows="9" maxlength="8000" placeholder="Cuéntame lo que observaste: motivo de consulta, síntomas, desde cuándo, contexto…" aria-describedby="contador-texto"></textarea>
+        <p id="contador-texto" class="apoyo contador">0 de 8000 caracteres (mínimo 20)</p>
+      </div>
+
+      <div id="panel-archivo" class="panel" hidden>
+        <div id="aclaracion-ocr" class="aviso aviso-ocr">
+          <p><strong>Antes de subir tu archivo.</strong> Para leer una foto o un PDF usamos un servicio externo de lectura de texto. El archivo se envía tal como está, <em>antes</em> de ocultar nombres y otros datos personales. Si es un caso real, te recomendamos tapar o recortar los datos personales antes de subirlo, o escribir el caso como texto.</p>
+          <label class="casilla" for="confirma-ocr">
+            <input id="confirma-ocr" type="checkbox">
+            <span>Entiendo y quiero subir el archivo.</span>
+          </label>
+        </div>
+        <div class="campo">
+          <label for="archivo-caso">Foto (JPG o PNG) o PDF de hasta 10 páginas</label>
+          <input id="archivo-caso" type="file" accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf" aria-describedby="nota-archivo">
+          <p id="nota-archivo" class="apoyo">Hasta 4 MB. Las fotos se reducen en tu dispositivo antes de enviarse.</p>
+        </div>
+      </div>
+
+      <p id="mensaje-nuevo" class="mensaje" role="alert" hidden></p>
+      <div class="acciones">
+        <button id="boton-generar" type="button" class="boton" disabled>Generar reporte</button>
+      </div>
+    </section>
+
+    <!-- 3. Avance -->
+    <section id="pantalla-avance" aria-labelledby="titulo-avance" hidden>
+      <h2 id="titulo-avance" class="titulo-seccion" tabindex="-1">Analizando el caso…</h2>
+      <p id="aviso-ocr-avance" class="apoyo" hidden>Recuerda: los archivos se leen con un servicio externo antes de ocultar los datos personales. Revisa que el texto leído sea correcto.</p>
+      <ol id="linea-tiempo" class="linea-tiempo"></ol>
+      <p id="estado-lector" class="visible-lector" role="status" aria-live="polite"></p>
+      <div id="bloque-error" class="mensaje mensaje-bloque" hidden>
+        <p id="texto-error" role="alert"></p>
+        <div class="acciones">
+          <button id="boton-reintentar" type="button" class="boton">Reintentar</button>
+          <button id="boton-editar" type="button" class="boton boton-suave">Editar el caso</button>
+        </div>
+      </div>
+      <div class="acciones" id="acciones-cancelar">
+        <button id="boton-cancelar" type="button" class="boton boton-suave">Cancelar</button>
+      </div>
+    </section>
+
+    <!-- 4. Reporte -->
+    <section id="pantalla-reporte" aria-labelledby="titulo-reporte" hidden>
+      <h2 id="titulo-reporte" class="titulo-seccion" tabindex="-1">Reporte del caso</h2>
+      <div class="acciones">
+        <button id="boton-docx" type="button" class="boton">Word (.docx)</button>
+        <button id="boton-pdf" type="button" class="boton boton-suave">PDF</button>
+        <button id="boton-nuevo" type="button" class="boton boton-suave">Nuevo caso</button>
+      </div>
+      <p id="mensaje-reporte" class="mensaje" role="alert" hidden></p>
+      <div id="cuerpo-reporte"></div>
+      <p class="aviso aviso-pie">Aviso: Herramienta de apoyo. No sustituye el criterio clínico: las hipótesis son sugerencias para que las valores.</p>
+    </section>
+
+  </main>
+</body>
+</html>
