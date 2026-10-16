@@ -442,3 +442,34 @@ def test_resultado_de_error_conserva_razon_amigable(monkeypatch):
     resultado = eventos_de(_con_resultado(monkeypatch, _resultado_interno(estado_final="error", razon_amigable="No se pudo completar.", reporte=None)))[-1]["resultado"]
     assert resultado["estado_final"] == "error" and resultado["razon_amigable"] == "No se pudo completar."
     assert "razon" not in resultado
+
+
+# ----------------------------------------------------------------------------- avisos al cliente: frases fijas
+async def test_los_avisos_que_llegan_al_cliente_son_frases_fijas_sin_detalle_interno():
+    from poc_psico.errores import FlujoDetenido
+    from poc_psico.esquemas import PruebaSugerida
+    from poc_psico.grafo import ejecutar
+    from poc_psico.reporte import FRASES_ADVERTENCIA
+
+    def guias(candidatos, sintomas):
+        raise FlujoDetenido('OpenRouter 402 en https://openrouter.example/api: {"error":"CUENTA-SECRETA-123 sin créditos"}')
+
+    def redactar(s, ca, al, n, g=None):
+        return ReporteClinico(
+            hipotesis=[HipotesisRedactada(codigo="6A70", justificacion="Según [PER_9] hay tristeza."),
+                       HipotesisRedactada(codigo="9Z99", justificacion="inventada")],
+            pruebas=[PruebaSugerida(nombre="Escala X", motivo="m", fuente_id="G3", cita_textual="algo")])
+
+    c, _ = construir(guias=guias, redactar=redactar)
+    resultado = await ejecutar(ENTRADA, c)
+    assert resultado["advertencias_tecnicas"]   # el detalle crudo se conserva en el servidor
+    enviado = modulo_app.resultado_para_cliente(resultado)
+    assert "advertencias_tecnicas" not in enviado
+    assert set(enviado["advertencias"]) == {FRASES_ADVERTENCIA[k] for k in
+                                            ("guias_no_disponibles", "hipotesis_descartada", "dato_sin_restablecer", "prueba_sin_referencia")}
+    todo = json.dumps(enviado, ensure_ascii=False).lower()
+    for prohibido in ("cuenta-secreta", "openrouter", "icd11_", "traza", "guardrail", "tool"):
+        assert prohibido not in todo, prohibido
+    avisos = json.dumps(enviado["advertencias"], ensure_ascii=False).lower()   # el reporte sí lleva ligas de la OMS y su texto
+    for prohibido in ("tool", "placeholder", "g3", "http", "9z99", "per_9"):
+        assert prohibido not in avisos, prohibido

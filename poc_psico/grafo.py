@@ -14,7 +14,7 @@ from .esquemas import ReporteClinico, SintomasPaciente
 from .guardrail import pasa_guardrail
 from .ocr import OcrError, es_archivo
 from .pii import MapaPII, anonimizar
-from .reporte import construir_datos, render_markdown, validar_hipotesis, validar_pruebas
+from .reporte import construir_datos, render_markdown, separar_advertencias, validar_hipotesis, validar_pruebas
 from .traduccion import PASOS, detalle_legible
 from .traza import contar_errores, contar_rondas, ensamblar_candidatos, extraer_traza, resumen_traza, texto_final
 
@@ -34,6 +34,7 @@ class Estado(TypedDict, total=False):
     reporte_md: str
     reporte_datos: dict
     advertencias: list
+    advertencias_tecnicas: list
 
 
 @dataclass
@@ -100,7 +101,8 @@ def construir_workflow(c: Componentes, metricas: dict):
             with _cronometro(metricas, "guias"):
                 return {"guias": c.guias(estado["candidatos"], estado["sintomas"])}
         except FlujoDetenido as e:
-            return {"guias": [], "advertencias": [f"No se pudieron consultar las guías clínicas: {e}"]}
+            frases, tecnicas = separar_advertencias([("guias_no_disponibles", str(e))])
+            return {"guias": [], "advertencias": frases, "advertencias_tecnicas": tecnicas}
 
     def nodo_reporte(estado: Estado) -> dict:
         with _cronometro(metricas, "reporte"):
@@ -108,17 +110,22 @@ def construir_workflow(c: Componentes, metricas: dict):
                 estado["sintomas"], estado["candidatos"], estado["alternativas"], estado["notas_busqueda_cie11"],
                 estado.get("guias") or [],
             )
-        hipotesis, advertencias = validar_hipotesis(reporte, estado["candidatos"])
+        hipotesis, avisos = validar_hipotesis(reporte, estado["candidatos"])
         if not hipotesis:
             raise FlujoDetenido("El reporte no contiene hipótesis con código obtenido de las tools")
-        pruebas, adv_pruebas = validar_pruebas(reporte.pruebas, estado.get("guias") or [])
+        pruebas, avisos_pruebas = validar_pruebas(reporte.pruebas, estado.get("guias") or [])
+        frases, tecnicas = separar_advertencias(avisos + avisos_pruebas)
         markdown = render_markdown(
             estado["sintomas"], hipotesis, reporte, estado["alternativas"], c.fecha(), estado.get("guias"), pruebas
         )
         datos = construir_datos(
             estado["sintomas"], hipotesis, reporte, estado["alternativas"], c.fecha(), estado.get("guias"), pruebas
         )
-        return {"reporte_md": markdown, "reporte_datos": datos, "advertencias": estado.get("advertencias", []) + advertencias + adv_pruebas}
+        return {
+            "reporte_md": markdown, "reporte_datos": datos,
+            "advertencias": list(dict.fromkeys(estado.get("advertencias", []) + frases)),
+            "advertencias_tecnicas": estado.get("advertencias_tecnicas", []) + tecnicas,
+        }
 
     grafo = StateGraph(Estado)
     grafo.add_node("guardrail", nodo_guardrail)
@@ -177,7 +184,7 @@ async def ejecutar_eventos(entrada: str, c: Componentes) -> AsyncIterator[dict]:
     resultado = {
         "estado_final": "error", "razon": "", "razon_amigable": "", "texto_anon": "", "prob_clinico": None, "sintomas": None,
         "candidatos": [], "alternativas": [], "traza_tools": [], "rondas_busqueda_cie11": 0, "reporte_md": "", "reporte": None,
-        "advertencias": [], "latencias": {}, "texto_ocr": None, "guias": [],
+        "advertencias": [], "advertencias_tecnicas": [], "latencias": {}, "texto_ocr": None, "guias": [],
     }
     if not entrada or not entrada.strip():
         resultado["razon"] = "La entrada está vacía"
@@ -243,6 +250,8 @@ async def ejecutar_eventos(entrada: str, c: Componentes) -> AsyncIterator[dict]:
 
     reporte_md, desconocidos = mapa.reinsertar(final["reporte_md"])
     reporte, desconocidos_datos = mapa.reinsertar_datos(final["reporte_datos"])
+    sin_valor = desconocidos + [d for d in dict.fromkeys(desconocidos_datos) if d not in desconocidos]
+    sin_valor_frases, sin_valor_tecnicas = separar_advertencias([("dato_sin_restablecer", p) for p in sin_valor])
     resultado.update(
         estado_final="ok",
         sintomas=final["sintomas"],
@@ -253,7 +262,8 @@ async def ejecutar_eventos(entrada: str, c: Componentes) -> AsyncIterator[dict]:
         rondas_busqueda_cie11=final["rondas_busqueda_cie11"],
         reporte_md=reporte_md,
         reporte=reporte,
-        advertencias=final.get("advertencias", []) + [f"Placeholder sin valor en el mapa: {p}" for p in desconocidos + [d for d in dict.fromkeys(desconocidos_datos) if d not in desconocidos]],
+        advertencias=list(dict.fromkeys(final.get("advertencias", []) + sin_valor_frases)),
+        advertencias_tecnicas=final.get("advertencias_tecnicas", []) + sin_valor_tecnicas,
     )
     yield {"tipo": "resultado", "resultado": resultado}
 

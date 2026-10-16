@@ -1,7 +1,7 @@
 from datetime import date
 
 from poc_psico.esquemas import HipotesisRedactada, PruebaSugerida, ReporteClinico
-from poc_psico.reporte import render_markdown, validar_hipotesis, validar_pruebas
+from poc_psico.reporte import FRASES_ADVERTENCIA, render_markdown, separar_advertencias, validar_hipotesis, validar_pruebas
 
 CANDIDATOS = [
     {
@@ -40,7 +40,7 @@ def test_validar_descarta_codigos_que_no_vienen_de_las_tools():
     ])
     finales, advertencias = validar_hipotesis(rep, CANDIDATOS)
     assert [h["codigo"] for h in finales] == ["6A70"]
-    assert any("9Z99" in a for a in advertencias)
+    assert advertencias == [("hipotesis_descartada", "código 9Z99 no obtenido de las tools")]
 
 
 def test_validar_no_duplica_hipotesis():
@@ -170,12 +170,18 @@ def test_la_cita_se_compara_sin_importar_mayusculas_acentos_ni_espacios():
 
 def test_una_cita_inventada_deja_la_prueba_sin_respaldo_y_avisa():
     validadas, adv = validar_pruebas([prueba(fuente_id="G1", cita_textual="el PHQ-9 cura la depresión")], [GUIA_G1])
-    assert validadas[0]["guia"] is None and any("PHQ-9" in a for a in adv)
+    assert validadas[0]["guia"] is None and [tipo for tipo, _ in adv] == ["prueba_sin_referencia"]
 
 
 def test_un_id_inexistente_deja_la_prueba_sin_respaldo_y_avisa():
     validadas, adv = validar_pruebas([prueba(fuente_id="G9", cita_textual="PHQ-9")], [GUIA_G1])
-    assert validadas[0]["guia"] is None and adv
+    assert validadas[0]["guia"] is None and [tipo for tipo, _ in adv] == ["prueba_sin_referencia"]
+
+
+def test_separar_advertencias_da_frases_fijas_sin_repetir_y_detalle_aparte():
+    frases, tecnicas = separar_advertencias([("prueba_sin_referencia", "A citó G3"), ("prueba_sin_referencia", "B citó G4")])
+    assert frases == [FRASES_ADVERTENCIA["prueba_sin_referencia"]]
+    assert tecnicas == ["prueba_sin_referencia: A citó G3", "prueba_sin_referencia: B citó G4"]
 
 
 def test_una_prueba_sin_fuente_queda_sin_respaldo_sin_advertencia():

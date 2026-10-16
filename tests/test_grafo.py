@@ -5,6 +5,7 @@ import pytest
 
 from poc_psico.errores import FlujoDetenido
 from poc_psico.esquemas import HipotesisRedactada, PruebaSugerida, ReporteClinico
+from poc_psico.reporte import FRASES_ADVERTENCIA
 from poc_psico.grafo import Componentes, ejecutar, ejecutar_eventos
 from tests.helpers import mensajes_con_error, mensajes_exitosos, mensajes_sin_resultados
 
@@ -92,7 +93,8 @@ async def test_placeholder_inventado_se_deja_y_se_advierte():
         hipotesis=[HipotesisRedactada(codigo="6A70", justificacion="Según [PER_9] hay tristeza.")]))
     r = await ejecutar(ENTRADA, c)
     assert "[PER_9]" in r["reporte_md"]
-    assert any("[PER_9]" in a for a in r["advertencias"])
+    assert r["advertencias"] == [FRASES_ADVERTENCIA["dato_sin_restablecer"]]
+    assert any("[PER_9]" in a for a in r["advertencias_tecnicas"])
 
 
 async def test_entrada_vacia_es_error_sin_llamar_a_nada():
@@ -258,7 +260,8 @@ async def test_si_la_busqueda_de_guias_falla_el_reporte_sale_sin_guias_y_con_adv
     c, _ = construir(guias=guias)
     r = await ejecutar(ENTRADA, c)
     assert r["estado_final"] == "ok" and r["guias"] == []
-    assert any("402" in a for a in r["advertencias"])
+    assert r["advertencias"] == [FRASES_ADVERTENCIA["guias_no_disponibles"]]
+    assert any("402" in a for a in r["advertencias_tecnicas"])
     assert "Guías clínicas" not in r["reporte_md"]
 
 
@@ -284,7 +287,8 @@ async def test_el_redactor_recibe_las_guias_con_id_y_las_pruebas_respaldadas_lle
     r = await ejecutar(ENTRADA, c)
     assert [x["id"] for x in redactar.recibidas] == ["G1"]
     assert "[Evaluación](https://www.apa.org/e)" in r["reporte_md"]
-    assert any("Inventada" in a for a in r["advertencias"])
+    assert r["advertencias"] == [FRASES_ADVERTENCIA["prueba_sin_referencia"]]
+    assert any("Inventada" in a for a in r["advertencias_tecnicas"])
 
 
 async def test_ejecutar_devuelve_reporte_con_nombres_reinsertados():

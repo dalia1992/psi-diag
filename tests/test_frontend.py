@@ -37,3 +37,4 @@ def test_textos_prohibidos_no_aparecen_en_la_interfaz():
         texto = (PUBLIC / nombre).read_text(encoding="utf-8").lower()
         for palabra in prohibidos:
             assert palabra not in texto, f"{nombre} contiene «{palabra}»"
+        assert not re.search(r"\btools?\b", texto), f"{nombre} contiene «tool»"

@@ -6,6 +6,22 @@ from datetime import date
 from .esquemas import ReporteClinico
 
 
+# Lo que ve la persona usuaria: frases fijas por tipo de aviso, sin texto de excepciones, ids de guías ni términos internos.
+# El detalle crudo de cada aviso queda solo en el servidor (`advertencias_tecnicas`), que no está en la lista blanca del cliente.
+FRASES_ADVERTENCIA = {
+    "hipotesis_descartada": "Se descartó una hipótesis del reporte porque no pudo respaldarse con la consulta a la CIE-11.",
+    "prueba_sin_referencia": "Alguna prueba sugerida quedó sin referencia, porque su cita no pudo comprobarse en las guías consultadas.",
+    "guias_no_disponibles": "No se pudieron consultar las guías clínicas; el reporte se generó sin ellas.",
+    "dato_sin_restablecer": "Algunos datos del caso no pudieron restablecerse en el reporte; revísalo contra el texto original.",
+}
+
+
+def separar_advertencias(avisos: list) -> tuple[list, list]:
+    """De una lista de (tipo, detalle) devuelve (frases fijas sin repetir para el cliente, detalles técnicos solo para el servidor)."""
+    frases = list(dict.fromkeys(FRASES_ADVERTENCIA[tipo] for tipo, _ in avisos))
+    return frases, [f"{tipo}: {detalle}" for tipo, detalle in avisos]
+
+
 def validar_hipotesis(reporte: ReporteClinico, candidatos: list):
     """Une cada hipótesis con su candidato. Código, título y liga salen de la tool, nunca del LLM."""
     por_codigo = {c["codigo"]: c for c in candidatos}
@@ -13,7 +29,7 @@ def validar_hipotesis(reporte: ReporteClinico, candidatos: list):
     for h in reporte.hipotesis:
         candidato = por_codigo.get(h.codigo)
         if candidato is None:
-            advertencias.append(f"Se descartó la hipótesis con código {h.codigo}: no fue obtenido de las tools")
+            advertencias.append(("hipotesis_descartada", f"código {h.codigo} no obtenido de las tools"))
             continue
         if h.codigo in vistos:
             continue
@@ -44,7 +60,7 @@ def _normalizar(texto: str) -> str:
 def validar_pruebas(pruebas: list, guias: list):
     """Una prueba queda respaldada solo si la guía existe y su extracto contiene la cita literal que dio el LLM.
 
-    La liga sale de la guía, nunca del LLM. Devuelve ([{nombre, motivo, guia|None, cita}], advertencias)."""
+    La liga sale de la guía, nunca del LLM. Devuelve ([{nombre, motivo, guia|None, cita}], avisos como (tipo, detalle))."""
     por_id = {g["id"]: g for g in guias or [] if g.get("id")}
     finales, advertencias = [], []
     for p in pruebas:
@@ -52,9 +68,9 @@ def validar_pruebas(pruebas: list, guias: list):
         if p.fuente_id:
             candidata = por_id.get(p.fuente_id)
             if candidata is None:
-                advertencias.append(f"La prueba {p.nombre} citó la guía {p.fuente_id}, que no existe: queda sin referencia")
+                advertencias.append(("prueba_sin_referencia", f"{p.nombre} citó la guía {p.fuente_id}, que no existe"))
             elif not cita or _normalizar(cita) not in _normalizar(candidata.get("extracto", "")):
-                advertencias.append(f"La cita de la prueba {p.nombre} no aparece en la guía {p.fuente_id}: queda sin referencia")
+                advertencias.append(("prueba_sin_referencia", f"la cita de {p.nombre} no aparece en la guía {p.fuente_id}"))
             else:
                 guia = candidata
         finales.append({"nombre": p.nombre, "motivo": p.motivo, "guia": guia, "cita": cita if guia else ""})
