@@ -225,6 +225,17 @@ def resultado_para_cliente(resultado: dict) -> dict:
     return {campo: resultado[campo] for campo in CAMPOS_RESULTADO_CLIENTE if campo in resultado}
 
 
+PASOS_MEDIDOS = ("ocr", "anonimizar", "guardrail", "extraer", "busqueda_cie11", "guias", "reporte")
+
+
+def pasos_ms(latencias) -> dict:
+    """Milisegundos por paso para el registro: solo nombres fijos y números (nunca texto del caso)."""
+    if not isinstance(latencias, dict):
+        return {}
+    return {n: int(latencias[n] * 1000) for n in PASOS_MEDIDOS
+            if isinstance(latencias.get(n), (int, float)) and not isinstance(latencias.get(n), bool)}
+
+
 def evento_para_cliente(evento: dict) -> dict:
     if evento.get("tipo") == "resultado":
         return {**evento, "resultado": resultado_para_cliente(evento.get("resultado") or {})}
@@ -267,6 +278,7 @@ async def transmitir(entrada: str, ruta: Path | None, id_solicitud: str, via: st
     inicio = time.perf_counter()
     activo, fin = activo or threading.Event(), fin or threading.Event()
     estado = "error"
+    tiempos: dict = {}
     siguiente: asyncio.Future | None = None
     flujo = None
     try:
@@ -303,6 +315,7 @@ async def transmitir(entrada: str, ruta: Path | None, id_solicitud: str, via: st
                     break
                 if evento.get("tipo") == "resultado":
                     estado = evento["resultado"].get("estado_final", "error")
+                    tiempos = pasos_ms(evento["resultado"].get("latencias"))
                 yield evento_sse(evento_para_cliente(evento))
         except asyncio.TimeoutError:
             error = ErrorApi("timeout", "El análisis tardó demasiado. Puedes intentarlo de nuevo.", 504, f"sin respuesta en {limite:g} s", True)
@@ -324,7 +337,7 @@ async def transmitir(entrada: str, ruta: Path | None, id_solicitud: str, via: st
             except BaseException:  # noqa: BLE001  se está cerrando; lo único que importa es borrar el archivo
                 pass
         _soltar_archivo(ruta, activo, fin)
-        registrar(id=id_solicitud, estado=estado, ms=milisegundos(inicio), via=via)
+        registrar(id=id_solicitud, estado=estado, ms=milisegundos(inicio), via=via, pasos_ms=tiempos)
 
 
 async def transmitir_demo(id_solicitud: str, via: str) -> AsyncIterator[str]:

@@ -131,8 +131,21 @@ def test_registro_no_contiene_el_texto_del_caso(cliente):
     todo = "\n".join(registros)
     assert "Laura" not in todo and "Mendoza" not in todo and "tristeza" not in todo
     datos = json.loads(registros[-1])
-    assert set(datos) == {"id", "estado", "ms", "via"}
+    assert set(datos) == {"id", "estado", "ms", "via", "pasos_ms"}
     assert datos["via"] == "texto" and datos["estado"] == "ok"
+    assert all(isinstance(v, int) for v in datos["pasos_ms"].values())
+    assert set(datos["pasos_ms"]) <= set(modulo_app.PASOS_MEDIDOS)
+
+
+def test_pasos_ms_solo_acepta_nombres_fijos_y_numeros():
+    sucio = {"guardrail": 1.2345, "busqueda_cie11": 2, "Laura Mendoza": 3.0, "extraer": "Laura", "reporte": True}
+    assert modulo_app.pasos_ms(sucio) == {"guardrail": 1234, "busqueda_cie11": 2000}
+    assert modulo_app.pasos_ms(None) == {}
+
+
+def test_latencias_no_llegan_al_navegador(cliente):
+    r = cliente.post("/api/caso", data={"texto": ENTRADA})
+    assert "latencias" not in eventos_de(r)[-1]["resultado"]
 
 
 # ----------------------------------------------------------------------------- archivos
