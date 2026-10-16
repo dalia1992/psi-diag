@@ -1,0 +1,142 @@
+[
+ {
+  "texto": "Paciente: Laura Mendoza Ríos, mujer de 34 años, vive en Guadalajara y trabaja en Banorte.",
+  "entidades": [
+   [
+    "Laura Mendoza Ríos",
+    "PER"
+   ],
+   [
+    "Guadalajara",
+    "LOC"
+   ],
+   [
+    "Banorte",
+    "ORG"
+   ]
+  ]
+ },
+ {
+  "texto": "Acude Marcelo Pizarro Quispe, de Cochabamba, derivado por el Hospital Regional de Occidente.",
+  "entidades": [
+   [
+    "Marcelo Pizarro Quispe",
+    "PER"
+   ],
+   [
+    "Cochabamba",
+    "LOC"
+   ],
+   [
+    "Hospital Regional de Occidente",
+    "ORG"
+   ]
+  ]
+ },
+ {
+  "texto": "La paciente, Xiomara, vive con su madre Itzel en Oaxaca y estudia en la UNAM.",
+  "entidades": [
+   [
+    "Xiomara",
+    "PER"
+   ],
+   [
+    "Itzel",
+    "PER"
+   ],
+   [
+    "Oaxaca",
+    "LOC"
+   ],
+   [
+    "UNAM",
+    "ORG"
+   ]
+  ]
+ },
+ {
+  "texto": "Su esposo, don Aurelio Cáceres, trabaja en Codelco desde hace diez años.",
+  "entidades": [
+   [
+    "Aurelio Cáceres",
+    "PER"
+   ],
+   [
+    "Codelco",
+    "ORG"
+   ]
+  ]
+ },
+ {
+  "texto": "Paciente LUCIA HERNANDEZ, 29 años, residente de Monterrey.",
+  "entidades": [
+   [
+    "LUCIA HERNANDEZ",
+    "PER"
+   ],
+   [
+    "Monterrey",
+    "LOC"
+   ]
+  ]
+ },
+ {
+  "texto": "refiere que juan perez lo molesta en la oficina de bogotá",
+  "entidades": [
+   [
+    "juan perez",
+    "PER"
+   ],
+   [
+    "bogotá",
+    "LOC"
+   ]
+  ]
+ },
+ {
+  "texto": "Fue remitida por la Dra. Fernanda Olvera del IMSS de Puebla por insomnio y tristeza.",
+  "entidades": [
+   [
+    "Fernanda Olvera",
+    "PER"
+   ],
+   [
+    "IMSS",
+    "ORG"
+   ],
+   [
+    "Puebla",
+    "LOC"
+   ]
+  ]
+ },
+ {
+  "texto": "Refiere que Brayan y su hermana Dayana se mudaron de Medellín tras perder el empleo en Bancolombia.",
+  "entidades": [
+   [
+    "Brayan",
+    "PER"
+   ],
+   [
+    "Dayana",
+    "PER"
+   ],
+   [
+    "Medellín",
+    "LOC"
+   ],
+   [
+    "Bancolombia",
+    "ORG"
+   ]
+  ]
+ },
+ {
+  "texto": "Paciente de 41 años con tristeza persistente, insomnio y pérdida de apetito desde hace tres meses.",
+  "entidades": []
+ },
+ {
+  "texto": "Antecedentes: ansiedad leve en la adolescencia; sin consumo de sustancias.",
+  "entidades": []
+ }
+]
