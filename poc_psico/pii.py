@@ -64,11 +64,21 @@ class MapaPII:
         return _recorrer(obj), desconocidos
 
 
+_UNIONES = "-'’"   # guion y apóstrofo entre letras forman parte del apellido (Muñoz-Ávila, O'Brien)
+
+
 def extender_a_palabra(texto: str, ini: int, fin: int) -> tuple[int, int]:
-    """Amplía [ini, fin) hasta los límites de palabra (letras y dígitos, con acentos y ñ)."""
-    while ini > 0 and texto[ini - 1].isalnum():
+    """Amplía [ini, fin) hasta los límites de palabra (letras y dígitos, con acentos y ñ).
+    Un guion o apóstrofo entre dos letras cuenta como parte de la palabra."""
+    while ini > 0 and (
+        texto[ini - 1].isalnum()
+        or (texto[ini - 1] in _UNIONES and ini > 1 and texto[ini - 2].isalpha() and texto[ini].isalpha())
+    ):
         ini -= 1
-    while fin < len(texto) and texto[fin].isalnum():
+    while fin < len(texto) and (
+        texto[fin].isalnum()
+        or (texto[fin] in _UNIONES and fin + 1 < len(texto) and texto[fin + 1].isalpha() and texto[fin - 1].isalpha())
+    ):
         fin += 1
     return ini, fin
 

@@ -144,7 +144,7 @@ def test_conserva_comportamiento_previo():
 
 def test_extender_a_palabra_con_acentos_y_enie():
     t = "Señora Muñoz-Ávila"
-    assert extender_a_palabra(t, 9, 11) == (7, 12)
+    assert extender_a_palabra(t, 9, 11) == (7, 18)   # el guion entre letras une el apellido compuesto
     assert extender_a_palabra("ab cd", 1, 4) == (0, 5)
 
 
@@ -157,3 +157,37 @@ def test_reinsertar_datos_recorre_estructuras_anidadas():
                      "t": ["Laura Mendoza"]}
     assert desconocidos == ["[PER_9]"]
     assert obj["a"] == f"Paciente {ph}"  # no muta el original
+
+
+def test_apellido_con_guion_se_cubre_completo_aunque_el_ner_solo_vea_una_parte():
+    t = "La paciente Ana Muñoz-Ávila llegó tarde."
+    for parte in ("Muñoz", "Ávila"):
+        mapa = MapaPII()
+        salida = aplicar_entidades(t, [ent(t, parte, "PER")], mapa)
+        assert salida == "La paciente Ana [PER_1] llegó tarde."
+        assert list(mapa.valores().values()) == ["Muñoz-Ávila"]
+
+
+def test_apellido_con_apostrofo_se_cubre_completo_con_ambos_tipos_de_apostrofo():
+    for apostrofo in ("'", "’"):
+        t = f"El señor O{apostrofo}Brien llegó."
+        for parte in ("O", "Brien"):
+            mapa = MapaPII()
+            salida = aplicar_entidades(t, [ent(t, parte, "PER")], mapa)
+            assert salida == "El señor [PER_1] llegó."
+            assert list(mapa.valores().values()) == [f"O{apostrofo}Brien"]
+
+
+def test_guion_y_apostrofo_fuera_de_una_palabra_no_se_incluyen():
+    t = "Dijo 'Ana' y luego - Ana - se fue; Ana- nada."
+    mapa = MapaPII()
+    ents = [ent(t, "Ana", "PER"), ent(t, "Ana", "PER", desde=15), ent(t, "Ana", "PER", desde=30)]
+    salida = aplicar_entidades(t, ents, mapa)
+    assert salida == "Dijo '[PER_1]' y luego - [PER_1] - se fue; [PER_1]- nada."
+
+
+def test_extender_a_palabra_no_cambia_una_frase_normal():
+    t = "Ana habló con María en la casa."
+    assert extender_a_palabra(t, 0, 3) == (0, 3)
+    assert extender_a_palabra(t, 10, 13) == (10, 13)
+    assert extender_a_palabra(t, 11, 13) == (10, 13)   # parte de una palabra sin signos: igual que antes

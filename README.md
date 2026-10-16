@@ -56,7 +56,7 @@ Prueba de punta a punta contra un servidor en marcha: `~/.venvs/mvp_psico/bin/py
 
 ## Límites conocidos
 
-- Nombres en minúsculas dentro de texto libre pueden escapar de la anonimización (detalle abajo).
+- Nombres en minúsculas o poco comunes dentro de texto libre pueden escapar de la anonimización; la cifra 23/23 se midió sobre un conjunto pequeño de ajuste, sin conjunto de prueba aparte, y no es una tasa general (detalle abajo).
 - La fuente Nunito no tiene la Ψ ni emoji; se usan imágenes o alternativas.
 - Al subir foto o PDF, el archivo **original** se envía a un servicio externo de OCR antes de anonimizar; la pantalla lo avisa.
 - Vercel Hobby es solo para uso personal no comercial; con casos reales de otras colegas hace falta el plan Pro.
@@ -73,5 +73,7 @@ El modelo se versiona partido en `models/ner/model_int8.onnx.part1`/`.part2` (Gi
 reensambla en memoria; se regenera con `scripts/exportar_ner_onnx.py`. Los textos largos se procesan por trozos de 1000 caracteres.
 
 **Límite conocido:** el modelo distingue mayúsculas. `con_pasada_auxiliar` repite el NER con las palabras en formato "Título"
-(acepta solo PER/LOC) y cubre nombres en MAYÚSCULAS o minúsculas de los casos de prueba (23/23), pero un nombre en minúsculas
-sin contexto claro (p. ej. un apodo solo) aún puede escapar. Por eso el texto anonimizado debe seguir revisándose antes de enviarse a un LLM externo.
+(acepta solo PER/LOC) y cubre nombres en MAYÚSCULAS o minúsculas de los casos de ajuste (23/23), pero un nombre en minúsculas
+sin contexto claro (p. ej. un apodo solo) aún puede escapar. Por eso el texto anonimizado debe seguir revisándose antes de enviarse a un LLM externo (la pantalla lo muestra en «Protección de datos personales → Ver qué encontró»).
+
+**La cifra 23/23 no es una tasa general:** se midió sobre el conjunto pequeño con el que se ajustó el método (10 textos sintéticos, 23 datos personales) y no hay un conjunto de prueba aparte. No debe leerse como «detecta el 100 %»: nombres en minúsculas o poco comunes pueden escapar, y por eso hay que revisar el texto anonimizado.

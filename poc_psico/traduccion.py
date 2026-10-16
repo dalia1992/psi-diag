@@ -46,10 +46,10 @@ def frase_herramienta(nombre: str) -> str:
     return ETIQUETAS_HERRAMIENTAS.get(nombre, FRASE_GENERICA)
 
 
-def _lectura(datos: dict) -> dict:
-    """Muestra el texto leído del archivo para que la persona revise el OCR; se recorta si es muy largo."""
+def _recortar(texto: str) -> list:
+    """Líneas no vacías del texto, recortadas a MAX_LINEAS_LECTURA líneas y MAX_CARACTERES_LECTURA caracteres."""
     lineas, total, recortado = [], 0, False
-    for linea in (datos.get("texto_ocr") or "").splitlines():
+    for linea in (texto or "").splitlines():
         if not linea.strip():
             continue
         if len(lineas) == MAX_LINEAS_LECTURA:
@@ -64,21 +64,29 @@ def _lectura(datos: dict) -> dict:
         total += len(linea)
     if recortado:
         lineas.append(TEXTO_RECORTADO)
-    return {"resumen": "Texto leído del archivo (revisa que sea correcto)", "lineas": lineas}
+    return lineas
+
+
+def _lectura(datos: dict) -> dict:
+    """Muestra el texto leído del archivo para que la persona revise el OCR; se recorta si es muy largo."""
+    return {"resumen": "Texto leído del archivo (revisa que sea correcto)", "lineas": _recortar(datos.get("texto_ocr"))}
 
 
 def _proteccion(datos: dict) -> dict:
-    # Solo se leen marcadores del texto anonimizado: el mapa de valores originales no se usa aquí.
-    marcadores = list(dict.fromkeys(_MARCADOR.findall(datos.get("texto_anon") or "")))
+    # Solo se lee el texto anonimizado (marcadores en lugar de los valores originales): el mapa de valores no se usa aquí.
+    # Va solo al navegador de la propia persona; así puede ver qué se enviará a los servicios externos.
+    anonimo = datos.get("texto_anon") or ""
+    marcadores = list(dict.fromkeys(_MARCADOR.findall(anonimo)))
     total = len(marcadores)
     if not total:
-        return {"resumen": "No se encontraron datos personales que ocultar", "lineas": []}
+        return {"resumen": "No se detectaron datos personales que ocultar (revisa el texto que se enviará)", "lineas": _recortar(anonimo)}
     lineas = []
     for tipo, etiqueta in _TIPOS_MARCADOR:
         del_tipo = [m for m in marcadores if m.startswith(f"[{tipo}_")]
         if del_tipo:
             lineas.append(f"{etiqueta}: {len(del_tipo)} ({', '.join(del_tipo)})")
-    return {"resumen": f"Datos personales ocultados antes del análisis: {total}", "lineas": lineas}
+    lineas += _recortar(anonimo)
+    return {"resumen": f"Datos personales ocultados antes del análisis: {total} (la detección automática puede fallar: revisa el texto que se enviará)", "lineas": lineas}
 
 
 def _verificacion(datos: dict) -> dict:

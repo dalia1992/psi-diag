@@ -306,7 +306,7 @@ El orden importa: **primero revocar, después crear otra**.
 - **Costo por caso:** unos centavos de dólar en OpenRouter (modelo + búsquedas de guías; leer un archivo con OCR suma aproximadamente US$0.002 por página; revisa las cifras reales en tu panel de OpenRouter). Vercel Hobby no cobra, pero tiene límites de uso. Revisa tu saldo en OpenRouter de vez en cuando y, si quieres, ponle un tope de gasto.
 - **Nada se guarda.** La app no tiene base de datos: el caso vive solo mientras se genera el reporte. Los registros guardan estados y tiempos, **nunca texto del caso**.
 - **Archivos subidos (foto/PDF):** un servicio externo de OCR lee el archivo **original, con nombres incluidos, antes de la anonimización**. La pantalla lo avisa y pide confirmación; mantén ese aviso.
-- Aun así, el texto anonimizado debe revisarse (hay nombres en minúsculas que el modelo puede no detectar).
+- **La anonimización puede fallar.** Se intenta ocultar nombres, lugares y organizaciones, pero hay nombres en minúsculas o poco comunes que el modelo puede no detectar. El texto anonimizado debe revisarse (la pantalla lo muestra en «Protección de datos personales → Ver qué encontró»). La cifra 23/23 de cobertura se midió sobre el conjunto pequeño de ajuste (10 textos, 23 datos personales), sin conjunto de prueba aparte: no es una tasa general.
 
 ## 14. Si algo falla: tabla por código de error
 

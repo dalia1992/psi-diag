@@ -123,3 +123,27 @@ def test_verificacion_texto_no_clinico_explica_en_lenguaje_claro():
     assert "no parece" in texto
     assert "caso clínico" in texto
     assert not re.search(r"guardrail|umbral|probabilidad|%", texto, re.IGNORECASE)
+
+
+def test_proteccion_muestra_el_texto_anonimizado_sin_valores_originales():
+    resultado = detalle_legible("proteccion", _datos_por_paso()["proteccion"])
+    assert resultado["lineas"][-1] == "Paciente: [PER_1], mujer de 34 años, vive en [LOC_1] y trabaja en [ORG_1]. [PER_2] es su hermana. [PER_1] refiere tristeza casi todos los días."
+    texto = " ".join(_textos(resultado))
+    for original in ("Laura", "Mendoza", "Guadalajara", "Banorte", "Xiomara"):
+        assert original not in texto
+
+
+def test_proteccion_conserva_los_saltos_de_linea_y_recorta_el_texto_largo():
+    anon = "\n".join(f"[PER_1] línea {i}" for i in range(100))
+    lineas = detalle_legible("proteccion", {"texto_anon": anon})["lineas"]
+    assert lineas[-1] == "… (texto recortado)"
+    assert len([linea for linea in lineas if "línea" in linea]) == 40
+    largo = detalle_legible("proteccion", {"texto_anon": "[PER_1] " + "x" * 5000})["lineas"]
+    assert largo[-1] == "… (texto recortado)"
+    assert sum(len(linea) for linea in largo[1:-1]) <= 4000
+
+
+def test_proteccion_sin_marcadores_muestra_el_texto_para_que_se_revise():
+    resultado = detalle_legible("proteccion", {"texto_anon": "Se siente triste desde hace dos meses."})
+    assert "No se detectaron datos personales" in resultado["resumen"]
+    assert resultado["lineas"] == ["Se siente triste desde hace dos meses."]
