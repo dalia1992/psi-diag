@@ -3,7 +3,7 @@ import re
 import unicodedata
 from datetime import date
 
-from .esquemas import ReporteClinico
+from .esquemas import ReporteClinico, sin_residuo_json
 
 
 # Lo que ve la persona usuaria: frases fijas por tipo de aviso, sin texto de excepciones, ids de guías ni términos internos.
@@ -148,7 +148,7 @@ def construir_datos(
             for g in (guias or [])
             if g.get("tipo", "apa") == tipo
         ],
-        "conclusion": (reporte.conclusion or "").strip(),
+        "conclusion": sin_residuo_json(reporte.conclusion),
         "aviso": AVISO,
     }
 
@@ -210,8 +210,8 @@ def render_markdown(
                 partes.append(f"**{etiqueta}**")
                 partes.append("\n".join(f"- [{g['titulo']}]({g['url']})" + (f" — «{g['cita']}»" if g.get("cita") else "") for g in grupo))
     numero = 7
-    if (reporte.conclusion or "").strip():
-        partes += [f"## {numero}. Conclusión, recomendaciones y siguientes pasos", reporte.conclusion.strip()]
+    if sin_residuo_json(reporte.conclusion):
+        partes += [f"## {numero}. Conclusión, recomendaciones y siguientes pasos", sin_residuo_json(reporte.conclusion)]
         numero += 1
     partes += [
         f"## {numero}. Aviso",

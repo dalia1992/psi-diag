@@ -792,7 +792,9 @@ function dibujarReporte(reporte, advertencias) {
   // Conclusión, recomendaciones y siguientes pasos
   if (typeof reporte.conclusion === "string" && reporte.conclusion.trim()) {
     const s = seccion("Conclusión, recomendaciones y siguientes pasos");
-    s.appendChild(el("p", "conclusion", reporte.conclusion.trim()));
+    for (const parrafo of reporte.conclusion.split(/\n+/)) {
+      if (parrafo.trim()) s.appendChild(el("p", "conclusion", parrafo.trim()));
+    }
     cuerpo.appendChild(s);
   }
 

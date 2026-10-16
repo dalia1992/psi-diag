@@ -242,7 +242,8 @@ def generar_docx(reporte: dict) -> bytes:
     conclusion = texto(reporte.get("conclusion"))
     if conclusion:
         encabezado(f"{numero}. Conclusión, recomendaciones y siguientes pasos", 1)
-        documento.add_paragraph(conclusion)
+        for parrafo in comun.parrafos(conclusion):
+            documento.add_paragraph(parrafo)
         numero += 1
     encabezado(f"{numero}. Aviso", 1)
     documento.add_paragraph(texto(reporte.get("aviso")))

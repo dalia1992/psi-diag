@@ -395,3 +395,12 @@ def test_word_tiene_campo_de_indice_con_ligas_a_los_titulos():
     titulos = [p.text for p in documento.paragraphs if p.style.name.startswith("Heading") and p.style.name != "Heading 3"]
     assert "1. Datos del caso" in titulos
     assert "Reporte de apoyo al psicodiagnóstico" not in titulos   # el subtítulo no entra al índice
+
+
+def test_la_conclusion_en_varios_parrafos_sale_como_parrafos_separados():
+    r = reporte_completo()
+    r["conclusion"] = "Primero.\n\nSegundo.\n\nTercero."
+    palabra = Document(io.BytesIO(generar_docx(r)))
+    textos = [p.text for p in palabra.paragraphs]
+    assert {"Primero.", "Segundo.", "Tercero."} <= set(textos)
+    assert "Primero." in texto_pdf(generar_pdf(r))

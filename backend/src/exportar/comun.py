@@ -62,3 +62,8 @@ def datos_del_caso(reporte: dict) -> list[tuple[str, str]]:
         ("Temporalidad", texto(caso.get("temporalidad")) or "No indicada"),
         ("Fecha del reporte", fecha_iso(reporte)),
     ]
+
+
+def parrafos(valor) -> list:
+    """Párrafos de un texto largo (separados por líneas en blanco o saltos de línea), sin vacíos."""
+    return [" ".join(p.split()) for p in re.split(r"\n\s*\n|\n", texto(valor)) if p.strip()]

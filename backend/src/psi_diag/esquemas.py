@@ -1,7 +1,9 @@
 """Contratos de salida (Pydantic). El LLM también lee las descripciones: están escritas como instrucciones."""
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field
+import re
+
+from pydantic import BaseModel, Field, field_validator
 
 LISTA = "Lista JSON de textos cortos, un elemento por dato (nunca un solo texto con varios datos). "
 
@@ -59,6 +61,14 @@ class PruebaSugerida(BaseModel):
     )
 
 
+# A veces el modelo cierra una cadena y le pega el resto del JSON de la llamada (`", "otro_campo": null}]`): se corta ahí.
+_RESIDUO_JSON = re.compile(r'"?\s*[,}\]]+\s*"\w+"\s*:.*$|"\s*[}\]]+\s*$', re.DOTALL)
+
+
+def sin_residuo_json(texto: str) -> str:
+    return _RESIDUO_JSON.sub("", texto or "").strip()
+
+
 class ReporteClinico(BaseModel):
     hipotesis: list[HipotesisRedactada] = Field(description="Lista de objetos, ordenados de la más a la menos plausible")
     ambiguedades: list[str] = Field(default_factory=list, description=LISTA + "Ambigüedades en la búsqueda o en el caso")
@@ -72,8 +82,13 @@ class ReporteClinico(BaseModel):
     conclusion: str = Field(
         default="",
         description=(
-            "Un párrafo (4 a 7 frases) para el profesional: qué sugiere el cuadro en conjunto, recomendaciones para la "
-            "evaluación y siguientes pasos (información por recabar, pruebas a aplicar, diferenciales a descartar). "
-            "Sin tratamiento ni dosis y sin afirmar un diagnóstico."
+            "Tres párrafos cortos separados por una línea en blanco, para el profesional: (1) qué sugiere el cuadro en "
+            "conjunto; (2) recomendaciones para la evaluación; (3) siguientes pasos (información por recabar, pruebas a "
+            "aplicar, diferenciales a descartar). Sin tratamiento ni dosis y sin afirmar un diagnóstico. Solo texto."
         ),
     )
+
+    @field_validator("conclusion", mode="after")
+    @classmethod
+    def _limpiar_conclusion(cls, valor: str) -> str:
+        return sin_residuo_json(valor)

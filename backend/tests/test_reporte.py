@@ -263,3 +263,13 @@ def test_construir_datos_pone_mayuscula_inicial_en_todos_los_items():
     assert d["datos_faltantes"] == ["Antecedentes previos"]
     assert d["alternativas"][0]["titulo"] == "Trastorno depresivo recurrente"
     assert d["pruebas"][0]["nombre"] == "Inventario de Beck" and d["pruebas"][0]["motivo"] == "Cuantificar severidad"
+
+
+def test_la_conclusion_pierde_el_residuo_de_json_que_el_modelo_pega():
+    from psi_diag.esquemas import ReporteClinico, sin_residuo_json
+
+    sucia = 'Siguientes pasos: aplicar PHQ-9.", "codigo_guia_no_aplica": null}]'
+    assert sin_residuo_json(sucia) == "Siguientes pasos: aplicar PHQ-9."
+    assert sin_residuo_json("Texto normal, con comas y «comillas».") == "Texto normal, con comas y «comillas»."
+    r = ReporteClinico(hipotesis=[{"codigo": "6A70", "justificacion": "x"}], conclusion=sucia)
+    assert r.conclusion == "Siguientes pasos: aplicar PHQ-9."

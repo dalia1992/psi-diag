@@ -138,7 +138,7 @@ input[type="file"] { font: inherit; max-width: 100%; }
 .archivo-elegido { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; padding: .35rem 0; border-bottom: 1px solid var(--lavanda-linea); }
 .archivo-nombre { font-weight: 600; overflow-wrap: anywhere; }
 .boton-chico { padding: .15rem .8rem; min-height: 32px; font-size: .9rem; margin-left: auto; }
-.conclusion { white-space: pre-line; }
+.conclusion { margin: 0 0 .75rem; }
 
 details { margin: 2px 0 0; }
 summary { cursor: pointer; color: var(--lavanda-texto); font-size: .95rem; font-weight: 600; list-style: none; padding: 4px 0; }

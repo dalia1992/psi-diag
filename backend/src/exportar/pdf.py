@@ -278,7 +278,8 @@ def generar_pdf(reporte: dict) -> bytes:
     conclusion = texto(reporte.get("conclusion"))
     if conclusion:
         seccion(f"{numero}. Conclusión, recomendaciones y siguientes pasos")
-        h.append(Paragraph(_t(conclusion), e["cuerpo"]))
+        for parrafo in comun.parrafos(conclusion):
+            h.append(Paragraph(_t(parrafo), e["cuerpo"]))
         numero += 1
 
     seccion(f"{numero}. Aviso")
