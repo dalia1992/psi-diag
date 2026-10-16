@@ -58,7 +58,7 @@ Prueba de punta a punta contra un servidor en marcha: `~/.venvs/mvp_psico/bin/py
 
 - Nombres en minúsculas o poco comunes dentro de texto libre pueden escapar de la anonimización; la cifra 23/23 se midió sobre un conjunto pequeño de ajuste, sin conjunto de prueba aparte, y no es una tasa general (detalle abajo).
 - La fuente Nunito no tiene la Ψ ni emoji; se usan imágenes o alternativas.
-- Al subir foto o PDF, el archivo **original** se envía a un servicio externo de OCR antes de anonimizar; la pantalla lo avisa.
+- Al subir foto o PDF, el archivo **original** se envía antes de anonimizar a OpenRouter, Mistral (OCR) y OpenAI (modelo auxiliar); la pantalla lo avisa y pide confirmación. Las llamadas de chat, OCR y búsqueda de guías piden a OpenRouter `provider.data_collection = deny` (no la Decisions API); es una petición, no una garantía.
 - Vercel Hobby es solo para uso personal no comercial; con casos reales de otras colegas hace falta el plan Pro.
 - La primera solicitud tras un rato sin uso puede ser lenta; un caso completo tarda de 1 a 3 minutos (corte a los 280 s).
 

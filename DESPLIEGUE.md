@@ -107,6 +107,8 @@ git push -u origin main
 
 **Ruta B: subir `feature/fase1` y decirle a Vercel que despliegue esa rama.**
 
+Estás en `feature/fase1`. **Haz primero las comprobaciones de abajo** («Comprobaciones antes de cualquier `git push`») y solo cuando todas salgan bien ejecuta:
+
 ```bash
 git push -u origin feature/fase1
 ```
@@ -174,7 +176,7 @@ Abre `https://TU-PROYECTO.vercel.app/api/health` (la dirección exacta aparece e
 
 `configurado:false` es lo correcto en este momento: aún no hay clave. Abre también la página principal: debe verse la pantalla de inicio. Si intentas analizar algo, la app responde **«sin_configurar»**: es el comportamiento esperado, no un fallo. (En Vercel, sin `ACCESS_CODE` la app nunca queda abierta.)
 
-Si `/api/health` da 404 o error 500, mira los «Runtime Logs»/«Logs» del proyecto (paso 10).
+Si `/api/health` da 404 o error 500, mira los «Runtime Logs»/«Logs» del proyecto (sección 9).
 
 ## 7. Agregar las variables
 
@@ -195,6 +197,7 @@ En Vercel: abre el proyecto → «Settings» → «Environment Variables» (los 
 | `MODEL_ID` | por ejemplo `anthropic/claude-haiku-5.5` | Opcional; ese es el valor por omisión. |
 | `MAX_POR_MINUTO` | `8` | Opcional: consultas por minuto por visitante. |
 | `BACKEND_TIMEOUT_S` | `280` | Opcional: segundos antes de cortar. Debe ser menor que 300. |
+| `APP_URL` | la dirección de tu app, por ejemplo `https://TU-PROYECTO.vercel.app` | Opcional: se manda a OpenRouter solo como referencia de quién llama (cabecera `HTTP-Referer`). Si no la defines, no se manda. |
 | `AGENT_MCP_URL` | dirección del servidor CIE-11 | Opcional; por omisión apunta al servidor en Azure. Solo cámbiala si te lo indican. |
 
 Escribe el valor tú misma en el campo (no lo pegues en ningún chat). Las variables marcadas como Sensitive **no se pueden volver a leer en Vercel, solo reemplazar**: por eso el gestor de contraseñas es tu única copia. Deja marcados los entornos «Production» (y «Preview» si quieres probar ahí).
@@ -305,7 +308,11 @@ El orden importa: **primero revocar, después crear otra**.
 
 - **Costo por caso:** unos centavos de dólar en OpenRouter (modelo + búsquedas de guías; leer un archivo con OCR suma aproximadamente US$0.002 por página; revisa las cifras reales en tu panel de OpenRouter). Vercel Hobby no cobra, pero tiene límites de uso. Revisa tu saldo en OpenRouter de vez en cuando y, si quieres, ponle un tope de gasto.
 - **Nada se guarda.** La app no tiene base de datos: el caso vive solo mientras se genera el reporte. Los registros guardan estados y tiempos, **nunca texto del caso**.
-- **Archivos subidos (foto/PDF):** un servicio externo de OCR lee el archivo **original, con nombres incluidos, antes de la anonimización**. La pantalla lo avisa y pide confirmación; mantén ese aviso.
+- **Archivos subidos (foto/PDF):** el archivo **original, con nombres incluidos, se envía antes de la anonimización** a: **OpenRouter** (que intermedia la llamada), el servicio de reconocimiento de texto (**Mistral**) y un modelo auxiliar de otro proveedor (**OpenAI**, `gpt-4o-mini`, que acompaña la petición aunque su respuesta se ignora). La pantalla lo nombra y pide confirmación con una casilla obligatoria; mantén ese aviso.
+- **Texto escrito:** a OpenRouter, a los proveedores del modelo de lenguaje y a las búsquedas de guías llega solo el texto anonimizado (o títulos de entidades de la CIE-11), nunca el original.
+- **Preferencia de privacidad en OpenRouter.** Las llamadas de chat (extracción de síntomas, agente de la CIE-11 y redacción del reporte), la lectura de archivos (OCR) y las búsquedas de guías llevan `provider.data_collection = deny`, que pide a OpenRouter enrutar solo a proveedores que declaran no guardar ni entrenar con tus datos. **No la llevan** las dos llamadas a la «Decisions API» de OpenRouter (verificación de que el texto es clínico y elección de fuentes de guías): es una API en versión alfa que no documenta ese campo, y solo reciben el texto ya anonimizado. Es una **petición de enrutamiento**, no una garantía contractual. Si alguna vez una llamada fallara con «no endpoints found» (ningún proveedor cumple), avisa a tu asistente en lugar de quitar la preferencia por tu cuenta.
+- **Antes de usar casos reales, revisa la privacidad de tu cuenta de OpenRouter.** En openrouter.ai, en la configuración de tu cuenta (los nombres pueden variar), busca las opciones de privacidad: que **no** permitan entrenar con tus datos ni guardar tus mensajes, y, si existe, la opción de enrutar solo a proveedores con **retención cero de datos** («zero data retention»). Haz esto **antes** de procesar cualquier caso real.
+- **Vercel Hobby no es para uso comercial.** Hobby está pensado para uso personal; si la usarán otras colegas con casos de sus pacientes, necesitas el plan Pro (y revisar sus términos) antes de ofrecerla.
 - **La anonimización puede fallar.** Se intenta ocultar nombres, lugares y organizaciones, pero hay nombres en minúsculas o poco comunes que el modelo puede no detectar. El texto anonimizado debe revisarse (la pantalla lo muestra en «Protección de datos personales → Ver qué encontró»). La cifra 23/23 de cobertura se midió sobre el conjunto pequeño de ajuste (10 textos, 23 datos personales), sin conjunto de prueba aparte: no es una tasa general.
 
 ## 14. Si algo falla: tabla por código de error
