@@ -16,6 +16,15 @@ _componentes = None
 _candado: asyncio.Lock | None = None
 
 
+def cabeceras_openrouter() -> dict:
+    """Cabeceras de atribución para OpenRouter. HTTP-Referer solo si se define APP_URL (opcional)."""
+    cabeceras = {"X-Title": "MVP Psicodiagnostico"}
+    url_app = os.getenv("APP_URL", "").strip()
+    if url_app:
+        cabeceras["HTTP-Referer"] = url_app
+    return cabeceras
+
+
 def _clave() -> str:
     return os.getenv("OPENROUTER_API_KEY", "").strip()
 
@@ -40,7 +49,7 @@ async def _construir():
         max_tokens=4096,
         timeout=120,
         max_retries=3,
-        default_headers={"HTTP-Referer": "https://mvp-psicodiagnostico.vercel.app", "X-Title": "MVP Psicodiagnostico"},
+        default_headers=cabeceras_openrouter(),
     )
     url_mcp = os.getenv("AGENT_MCP_URL", AGENT_MCP_URL_PREDETERMINADA)
     tools = await cargar_tools(url_mcp, TOOLS_BASE)
