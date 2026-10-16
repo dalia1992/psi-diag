@@ -67,19 +67,35 @@ def _base64(datos: bytes) -> str:
 
 def _cargar(ruta: pathlib.Path, lado: int) -> Image.Image:
     _exigir_archivo(ruta)
+    return _abrir(ruta, ruta.name, lado)
+
+
+def _abrir(origen, nombre: str, lado: int) -> Image.Image:
+    """Abre la imagen (ruta o flujo de bytes), la pasa a RGB y la reduce a `lado` píxeles como máximo."""
     try:
-        with bomba_como_error(), Image.open(ruta) as original:
+        with bomba_como_error(), Image.open(origen) as original:
             if not dimensiones_aceptables(*original.size):   # solo el encabezado: nada se ha decodificado todavía
-                raise OcrError(f"{ruta.name}: {MENSAJE_IMAGEN_GRANDE}")
+                raise OcrError(f"{nombre}: {MENSAJE_IMAGEN_GRANDE}")
             if original.format == "JPEG":
                 original.draft("RGB", (lado, lado))   # el decodificador JPEG reduce por 2, 4 u 8 mientras lee
             imagen = original.convert("RGB")  # descarta la transparencia de los PNG
     except ERRORES_BOMBA as e:
-        raise OcrError(f"{ruta.name}: {MENSAJE_IMAGEN_GRANDE}") from e
+        raise OcrError(f"{nombre}: {MENSAJE_IMAGEN_GRANDE}") from e
     except (UnidentifiedImageError, OSError) as e:
-        raise OcrError(f"No se pudo abrir {ruta.name} como imagen: {e}") from e
+        raise OcrError(f"No se pudo abrir {nombre} como imagen: {e}") from e
     imagen.thumbnail((lado, lado))
     return imagen
+
+
+def imagenes_a_pdf(imagenes: list) -> bytes:
+    """Une varias fotos, en el orden dado, en un solo PDF con una página por foto. `imagenes` es [(nombre, bytes)]; cada foto
+    se reduce a LADO_MAXIMO_MISTRAL como al leer una sola, así que diez fotos no ocupan diez veces su tamaño en memoria."""
+    if not imagenes:
+        raise OcrError("No hay imágenes que unir")
+    paginas = [_abrir(io.BytesIO(datos), nombre, LADO_MAXIMO_MISTRAL) for nombre, datos in imagenes]
+    salida = io.BytesIO()
+    paginas[0].save(salida, "PDF", save_all=True, append_images=paginas[1:], resolution=150)
+    return salida.getvalue()
 
 
 def _codificar(imagen: Image.Image, formato: str, **opciones) -> str:

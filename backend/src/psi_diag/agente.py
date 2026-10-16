@@ -99,6 +99,9 @@ class Reintentos503(AgentMiddleware):
         return await acon_reintentos_503(manejador, peticion, aesperar=self._aesperar)
 
 
+TOOLS_CON_CONSULTA = ("icd11_buscar_fundacion", "icd11_buscar_codigo_mms", "icd11_buscar_sintomas_y_signos")
+
+
 def construir_agente(llm, tools, prompt: str = PROMPT_AGENTE, max_rondas: int = 5):
     from langchain.agents import create_agent
 
@@ -116,12 +119,51 @@ def mensaje_inicial(sintomas: dict, max_rondas: int = 5) -> dict:
     return {"messages": [{"role": "user", "content": contenido}]}
 
 
+def _textos(valor) -> list:
+    """Cadenas de un argumento de tool (anidado o no), sin ligas: lo que se buscó, no a dónde."""
+    if isinstance(valor, str):
+        return [] if valor.startswith("http") else [valor.strip()]
+    if isinstance(valor, dict):
+        return [t for v in valor.values() for t in _textos(v)]
+    if isinstance(valor, (list, tuple)):
+        return [t for v in valor for t in _textos(v)]
+    return []
+
+
+def consulta_de(argumentos) -> str:
+    """Texto de la consulta que se manda a una tool de búsqueda de la CIE-11; vacío si no hay."""
+    return "; ".join(t for t in dict.fromkeys(_textos(argumentos)) if t)[:120]
+
+
+def _avisar_busquedas():
+    """Callback de LangChain que va mostrando las consultas a la CIE-11 mientras el agente trabaja; None si nadie las escucha."""
+    from langchain_core.callbacks import BaseCallbackHandler
+
+    from .progreso import detalle, hay_emisor
+    from .traduccion import frase_herramienta
+
+    if not hay_emisor():
+        return None
+
+    class Avisos(BaseCallbackHandler):
+        def on_tool_start(self, serialized, input_str, *, inputs=None, **kwargs):
+            nombre = (serialized or {}).get("name") or kwargs.get("name") or ""
+            consulta = consulta_de(inputs if inputs is not None else input_str) if nombre in TOOLS_CON_CONSULTA else ""
+            detalle("cie11", f"«{consulta}»" if consulta else "", negrita=frase_herramienta(nombre) + (":" if consulta else ""))
+
+    return Avisos()
+
+
 async def correr_agente(agente, sintomas: dict, max_rondas: int = 5) -> list:
     from langgraph.errors import GraphRecursionError
 
     limite = limite_de_pasos(max_rondas)
+    config = {"recursion_limit": limite}
+    avisos = _avisar_busquedas()
+    if avisos is not None:
+        config["callbacks"] = [avisos]
     try:
-        salida = await agente.ainvoke(mensaje_inicial(sintomas, max_rondas), config={"recursion_limit": limite})
+        salida = await agente.ainvoke(mensaje_inicial(sintomas, max_rondas), config=config)
     except GraphRecursionError as e:
         raise FlujoDetenido(f"El agente alcanzó el tope de {limite} pasos") from e
     return salida["messages"]

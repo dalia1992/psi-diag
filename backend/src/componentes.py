@@ -6,7 +6,7 @@ import asyncio
 import os
 from pathlib import Path
 
-UMBRAL_GUARDRAIL = 0.5
+UMBRAL_GUARDRAIL = 0.7   # medido con JEV real (2026-10-16): no clínicos <= 0.07, clínicos >= 0.93
 MAX_RONDAS = 5
 BUSCAR_GUIAS = True
 AGENT_MCP_URL_PREDETERMINADA = "https://cie11-mcp-server.orangerock-5a17ced7.eastus.azurecontainerapps.io/sse"
@@ -51,11 +51,12 @@ def _clave() -> str:
 async def _construir():
     from psi_diag.agente import PROMPT_AGENTE, TOOLS_BASE, cargar_tools, construir_agente, correr_agente
     from psi_diag.grafo import Componentes
-    from psi_diag.guardrail import consultar_decisions
-    from psi_diag.guias import buscar_guias, crear_decisor_fuentes, crear_decisor_jev
+    from psi_diag.guardrail import ClasificacionClinica, consultar_decisions, guardrail_combinado
+    from psi_diag.guias import buscar_guias, crear_clasificador_relevancia_jev, crear_decisor_fuentes, crear_decisor_jev
     from psi_diag.ner_onnx import con_pasada_auxiliar, crear_ner_onnx
     from psi_diag.nodos import crear_extractor, crear_redactor
     from psi_diag.ocr import leer_archivo_mistral
+    from psi_diag.reintentos import estructurar
 
     clave = _clave()
     llm = crear_llm(clave)
@@ -70,13 +71,17 @@ async def _construir():
     def _ocr(ruta):  # Mistral OCR vía OpenRouter: el archivo sale a OpenRouter y Mistral antes de anonimizar
         return leer_archivo_mistral(ruta, clave)
 
-    def _guardrail(texto):
-        return consultar_decisions(texto, clave)
+    clasificador_clinico = estructurar(llm, ClasificacionClinica)
+
+    def _guardrail(texto):   # JEV y, si lo aprueba, un LLM con ejemplos confirma que sea una nota clínica de psicología
+        return guardrail_combinado(texto, lambda t: consultar_decisions(t, clave), clasificador_clinico, UMBRAL_GUARDRAIL)
 
     decidir_fuentes = crear_decisor_jev(clave, respaldo=crear_decisor_fuentes(llm))
 
+    clasificar_relevancia = crear_clasificador_relevancia_jev(clave)
+
     def _guias(candidatos, sintomas):
-        return buscar_guias(candidatos, sintomas, clave, decidir_fuentes)
+        return buscar_guias(candidatos, sintomas, clave, decidir_fuentes, clasificar=clasificar_relevancia)
 
     return Componentes(
         ner=ner,
@@ -88,6 +93,11 @@ async def _construir():
         ocr=_ocr,
         guias=_guias if BUSCAR_GUIAS else None,
     )
+
+
+def componentes_listos() -> bool:
+    """True si esta instancia ya armó los componentes (la próxima consulta no paga el arranque en frío)."""
+    return _componentes is not None
 
 
 async def obtener_componentes():

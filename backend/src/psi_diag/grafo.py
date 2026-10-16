@@ -14,6 +14,7 @@ from .esquemas import ReporteClinico, SintomasPaciente
 from .guardrail import pasa_guardrail
 from .ocr import OcrError, es_archivo
 from .pii import MapaPII, anonimizar
+from .progreso import registrar_emisor
 from .reporte import construir_datos, render_markdown, separar_advertencias, validar_hipotesis, validar_pruebas
 from .traduccion import PASOS, detalle_legible
 from .traza import contar_errores, contar_rondas, ensamblar_candidatos, extraer_traza, resumen_traza, texto_final
@@ -145,7 +146,7 @@ def construir_workflow(c: Componentes, metricas: dict):
 
 
 RAZON_GENERICA = "No se pudo completar el análisis. Puedes intentarlo de nuevo."
-RAZON_FUERA_DE_ALCANCE = "Este texto no parece describir un caso clínico; revisa lo que escribiste e inténtalo de nuevo."
+RAZON_FUERA_DE_ALCANCE = "Este texto no parece ser un caso de psicología clínica. Ψ-DIAG apoya a profesionales de la psicología con notas clínicas de pacientes; revisa lo que escribiste e inténtalo de nuevo."
 _RAZONES_AMIGABLES = (  # (inicio del mensaje de FlujoDetenido, frase para la persona usuaria)
     ("La entrada está vacía", "Escribe o sube la descripción del caso para poder analizarlo."),
     ("No se identificaron síntomas", "No se identificaron síntomas en el texto; describe con más detalle lo que presenta la persona."),
@@ -221,15 +222,43 @@ async def ejecutar_eventos(entrada: str, c: Componentes) -> AsyncIterator[dict]:
         yield _paso("proteccion", "listo", {"texto_anon": resultado["texto_anon"]})
 
         yield _paso("verificacion", "en_curso")
-        flujo = construir_workflow(c, metricas).astream({"texto_anon": resultado["texto_anon"]}, stream_mode="updates")
-        async with aclosing(flujo):
-            async for cambio in flujo:
-                for nodo, datos in cambio.items():
-                    final.update(datos)
-                    paso_id = _NODO_A_PASO[nodo]
-                    yield _paso(paso_id, "listo", final)
-                    if paso_id in _PASO_SIGUIENTE and not (paso_id == "verificacion" and not final.get("continuar")):
-                        yield _paso(_PASO_SIGUIENTE[paso_id], "en_curso")
+        # El grafo corre en una tarea aparte y vuelca sus cambios en la misma cola donde los pasos dejan sus `detalle`
+        # (desde hilos, de ahí call_soon_threadsafe): así el avance dentro de un paso sale mientras el paso corre.
+        cola: asyncio.Queue = asyncio.Queue()
+        bucle = asyncio.get_running_loop()
+        registrar_emisor(lambda evento: bucle.call_soon_threadsafe(cola.put_nowait, ("detalle", evento)))
+
+        async def bombear() -> None:
+            try:
+                flujo = construir_workflow(c, metricas).astream({"texto_anon": resultado["texto_anon"]}, stream_mode="updates")
+                async with aclosing(flujo):
+                    async for cambio in flujo:
+                        await cola.put(("cambio", cambio))
+                await cola.put(("fin", None))
+            except Exception as e:  # noqa: BLE001  se vuelve a levantar abajo, en el generador
+                await cola.put(("error", e))
+
+        tarea = asyncio.ensure_future(bombear())
+        try:
+            while True:
+                clase, valor = await cola.get()
+                if clase == "detalle":
+                    yield valor
+                elif clase == "error":
+                    raise valor
+                elif clase == "fin":
+                    break
+                else:
+                    for nodo, datos in valor.items():
+                        final.update(datos)
+                        paso_id = _NODO_A_PASO[nodo]
+                        yield _paso(paso_id, "listo", final)
+                        if paso_id in _PASO_SIGUIENTE and not (paso_id == "verificacion" and not final.get("continuar")):
+                            yield _paso(_PASO_SIGUIENTE[paso_id], "en_curso")
+        finally:
+            if not tarea.done():
+                tarea.cancel()
+            await asyncio.gather(tarea, return_exceptions=True)
     except Exception as e:
         resultado["razon"] = str(e) if isinstance(e, FlujoDetenido) else f"Falla inesperada ({type(e).__name__}): {e}"
         resultado["razon_amigable"] = _razon_amigable_error(e, en_lectura)

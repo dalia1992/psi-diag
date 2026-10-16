@@ -41,6 +41,7 @@ def _datos_por_paso():
         }
     ]
     return {
+        "conexion": {},
         "lectura": {"texto_ocr": "Paciente: Laura Mendoza Ríos, mujer de 34 años.\nVive en Guadalajara."},
         "proteccion": {"texto_anon": TEXTO_ANON, "mapa": ORIGINALES},
         "verificacion": {"prob_clinico": 0.97, "continuar": True},
@@ -122,7 +123,7 @@ def test_verificacion_texto_no_clinico_explica_en_lenguaje_claro():
     resultado = detalle_legible("verificacion", {"prob_clinico": 0.02, "continuar": False})
     texto = " ".join(_textos(resultado))
     assert "no parece" in texto
-    assert "caso clínico" in texto
+    assert "psicología clínica" in texto
     assert not re.search(r"guardrail|umbral|probabilidad|%", texto, re.IGNORECASE)
 
 

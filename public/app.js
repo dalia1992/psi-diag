@@ -5,9 +5,14 @@ import { parsearSSE, interpretarFin } from "./sse.js";
 
 const MIN_TEXTO = 20;
 const MAX_TEXTO = 8000;
-const MAX_BYTES = 4_000_000;
+const MAX_BYTES = 4_000_000; // un PDF
+const MAX_BYTES_TOTAL = 4_000_000; // todas las imágenes juntas (Vercel rechaza cuerpos de más de 4.5 MB)
+const MAX_IMAGENES = 10;
+// Lado mayor y calidad JPEG de cada intento: si las imágenes juntas pesan demasiado se prueba con el siguiente.
+const NIVELES_REDUCCION = [[2000, 0.85], [1600, 0.8], [1300, 0.75], [1000, 0.7]];
 
 const TITULOS = {
+  conexion: "Conexión con los servicios",
   lectura: "Lectura del archivo",
   proteccion: "Protección de datos personales",
   verificacion: "Verificación del texto",
@@ -17,6 +22,7 @@ const TITULOS = {
   reporte: "Redacción del reporte",
 };
 const ACTIVIDAD = {
+  conexion: "Conectando con los servicios (la primera vez puede tardar unos segundos)",
   lectura: "Leyendo el archivo",
   proteccion: "Ocultando nombres, lugares y organizaciones",
   verificacion: "Comprobando que sea un caso clínico",
@@ -37,13 +43,15 @@ const estado = {
   codigo: "",
   requiereCodigo: false,
   modo: "texto",
-  archivo: null, // {blob, nombre} ya validado y, si es foto, reducido
+  seleccion: [], // lo que la persona eligió, en orden: {archivo, nombre, esPdf, cache}
+  archivos: [], // lo que se envía, ya validado y, si son fotos, reducidas: [{blob, nombre}]
   pasos: [], // recorrido terminado: {titulo, resumen, lineas}
   reporte: null,
   controlador: null,
   enCurso: false,
+  procesando: false, // se están reduciendo las fotos elegidas
 };
-const filas = new Map(); // id de paso -> {li, avance}
+const filas = new Map(); // id de paso -> {li, avance, vivo, claves}
 
 const $ = (id) => document.getElementById(id);
 
@@ -123,6 +131,8 @@ async function consultarSalud() {
     const r = await fetch("/api/health", { cache: "no-store" });
     const datos = await r.json();
     estado.requiereCodigo = Boolean(datos.requiere_codigo);
+    // Despierta el modelo de protección de datos y la conexión a la CIE-11 mientras la persona escribe su caso: sin esperar la respuesta.
+    if (datos.configurado) fetch("/api/calentar", { cache: "no-store" }).catch(() => {});
   } catch {
     estado.requiereCodigo = false;
   }
@@ -190,7 +200,7 @@ function puedeGenerar() {
     const n = textoCaso().length;
     return n >= MIN_TEXTO && n <= MAX_TEXTO;
   }
-  return $("confirma-ocr").checked && estado.archivo !== null;
+  return $("confirma-ocr").checked && estado.archivos.length > 0 && !estado.procesando;
 }
 
 function actualizarBotonGenerar() {
@@ -235,43 +245,110 @@ export async function reducirImagen(archivo, ladoMax = 2000, calidad = 0.85) {
 
 let turnoArchivo = 0;
 
-async function elegirArchivo() {
-  const turno = ++turnoArchivo; // una elección más reciente invalida a la anterior
-  estado.archivo = null;
-  mostrarMensaje($("mensaje-nuevo"), "");
-  actualizarBotonGenerar();
-  const archivo = $("archivo-caso").files[0];
-  if (!archivo) return;
+function tipoDe(archivo) {
   const nombre = archivo.name.toLowerCase();
-  const esPdf = nombre.endsWith(".pdf") || archivo.type === "application/pdf";
-  const esFoto = /\.(jpe?g|png)$/.test(nombre) || archivo.type === "image/jpeg" || archivo.type === "image/png";
-  if (!esPdf && !esFoto) {
-    mostrarMensaje($("mensaje-nuevo"), "Solo se aceptan fotos JPG o PNG y archivos PDF.");
-    return;
+  if (nombre.endsWith(".pdf") || archivo.type === "application/pdf") return "pdf";
+  if (/\.(jpe?g|png)$/.test(nombre) || archivo.type === "image/jpeg" || archivo.type === "image/png") return "foto";
+  return null;
+}
+
+function tamanoLegible(bytes) {
+  return bytes >= 1_000_000 ? `${(bytes / 1_000_000).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1000))} KB`;
+}
+
+/** Dibuja la lista de lo elegido, con un botón para quitar cada archivo. */
+function dibujarSeleccion() {
+  const lista = $("lista-archivos");
+  vaciar(lista);
+  estado.seleccion.forEach((entrada, i) => {
+    const li = el("li", "archivo-elegido");
+    li.appendChild(el("span", "archivo-nombre", `${i + 1}. ${entrada.nombre}`));
+    li.appendChild(el("span", "nota-suave", ` · ${tamanoLegible(entrada.archivo.size)}`));
+    const quitar = el("button", "boton boton-suave boton-chico", "Quitar");
+    quitar.type = "button";
+    quitar.setAttribute("aria-label", `Quitar ${entrada.nombre}`);
+    quitar.addEventListener("click", () => {
+      estado.seleccion.splice(i, 1);
+      procesarSeleccion();
+    });
+    li.appendChild(quitar);
+    lista.appendChild(li);
+  });
+  lista.hidden = estado.seleccion.length === 0;
+}
+
+/** Suma lo elegido a la selección: un solo PDF, o hasta 10 fotos (sin mezclar). */
+function agregarArchivos() {
+  const nuevos = Array.from($("archivo-caso").files || []);
+  $("archivo-caso").value = ""; // así se puede volver a elegir el mismo archivo
+  mostrarMensaje($("mensaje-nuevo"), "");
+  for (const archivo of nuevos) {
+    const tipo = tipoDe(archivo);
+    if (!tipo) return mostrarMensaje($("mensaje-nuevo"), "Solo se aceptan fotos JPG o PNG y archivos PDF.");
+    const hayPdf = estado.seleccion.some((e) => e.esPdf);
+    if (tipo === "pdf" && estado.seleccion.length > 0) {
+      return mostrarMensaje($("mensaje-nuevo"), "Sube un solo PDF o varias fotos, sin mezclarlos. Quita lo anterior para cambiar.");
+    }
+    if (tipo === "foto" && hayPdf) {
+      return mostrarMensaje($("mensaje-nuevo"), "Ya elegiste un PDF. Quítalo si prefieres subir fotos.");
+    }
+    if (tipo === "foto" && estado.seleccion.length >= MAX_IMAGENES) {
+      return mostrarMensaje($("mensaje-nuevo"), `Puedes subir hasta ${MAX_IMAGENES} fotos.`);
+    }
+    estado.seleccion.push({ archivo, nombre: archivo.name, esPdf: tipo === "pdf", cache: new Map() });
   }
-  if (esPdf) {
-    if (archivo.size > MAX_BYTES) {
-      mostrarMensaje($("mensaje-nuevo"), "El PDF pesa más de 4 MB. Elige uno más liviano o escribe el caso como texto.");
-      return;
-    }
-    estado.archivo = { blob: archivo, nombre: "caso.pdf" };
-  } else {
-    let reducida;
-    try {
-      reducida = await reducirImagen(archivo);
-      if (turno !== turnoArchivo) return;
-    } catch {
-      if (turno !== turnoArchivo) return;
-      mostrarMensaje($("mensaje-nuevo"), "No se pudo leer la foto. Prueba con otra o escribe el caso como texto.");
-      return;
-    }
-    if (reducida.size > MAX_BYTES) {
-      mostrarMensaje($("mensaje-nuevo"), "La foto sigue pesando más de 4 MB aun reducida. Prueba con otra o escribe el caso como texto.");
-      return;
-    }
-    estado.archivo = { blob: reducida, nombre: "caso.jpg" };
+  procesarSeleccion();
+}
+
+async function reducirEntrada(entrada, nivel) {
+  if (!entrada.cache.has(nivel)) {
+    const [lado, calidad] = NIVELES_REDUCCION[nivel];
+    entrada.cache.set(nivel, await reducirImagen(entrada.archivo, lado, calidad));
   }
+  return entrada.cache.get(nivel);
+}
+
+/** Valida y prepara lo elegido: un PDF va tal cual; las fotos se reducen en el dispositivo hasta que juntas quepan en el envío. */
+async function procesarSeleccion() {
+  const turno = ++turnoArchivo; // una elección más reciente invalida a la anterior
+  estado.archivos = [];
+  dibujarSeleccion();
   actualizarBotonGenerar();
+  if (estado.seleccion.length === 0) return;
+  estado.procesando = true;
+  actualizarBotonGenerar();
+  try {
+    if (estado.seleccion[0].esPdf) {
+      const { archivo } = estado.seleccion[0];
+      if (archivo.size > MAX_BYTES) {
+        mostrarMensaje($("mensaje-nuevo"), "El PDF pesa más de 4 MB. Elige uno más liviano o escribe el caso como texto.");
+        return;
+      }
+      estado.archivos = [{ blob: archivo, nombre: "caso.pdf" }];
+      return;
+    }
+    for (let nivel = 0; nivel < NIVELES_REDUCCION.length; nivel++) {
+      const reducidas = [];
+      for (const entrada of estado.seleccion) {
+        reducidas.push(await reducirEntrada(entrada, nivel));
+        if (turno !== turnoArchivo) return;
+      }
+      const total = reducidas.reduce((suma, blob) => suma + blob.size, 0);
+      if (total <= MAX_BYTES_TOTAL) {
+        estado.archivos = reducidas.map((blob, i) => ({ blob, nombre: `hoja-${i + 1}.jpg` }));
+        return;
+      }
+    }
+    mostrarMensaje($("mensaje-nuevo"), "Las fotos pesan más de 4 MB juntas aun reducidas. Quita alguna o escribe el caso como texto.");
+  } catch {
+    if (turno !== turnoArchivo) return;
+    mostrarMensaje($("mensaje-nuevo"), "No se pudo leer una de las fotos. Quítala, prueba con otra o escribe el caso como texto.");
+  } finally {
+    if (turno === turnoArchivo) {
+      estado.procesando = false;
+      actualizarBotonGenerar();
+    }
+  }
 }
 
 // ----------------------------------------------------------------------------- avance
@@ -287,9 +364,29 @@ function armarLineaDeTiempo() {
   for (const id of pasosEsperados()) crearFila(id, TITULOS[id]);
 }
 
+const FUENTES_GUIAS = ["IMSS", "APA", "OMS"];
+
+/** Pone el nombre del paso. En el de las guías, IMSS, APA y OMS van en negritas (con <strong>, nunca como HTML). */
+function ponerNombre(nodo, id, nombre) {
+  vaciar(nodo);
+  const dentro = id === "guias" ? /^(.*\()(IMSS), (APA), (OMS)(\).*)$/.exec(nombre) : null;
+  if (!dentro) {
+    nodo.textContent = nombre;
+    return;
+  }
+  nodo.appendChild(document.createTextNode(dentro[1]));
+  FUENTES_GUIAS.forEach((fuente, i) => {
+    if (i > 0) nodo.appendChild(document.createTextNode(", "));
+    nodo.appendChild(el("strong", "", fuente));
+  });
+  nodo.appendChild(document.createTextNode(dentro[5]));
+}
+
 function crearFila(id, titulo) {
   const li = el("li", "paso");
-  li.appendChild(el("span", "paso-nombre", titulo || TITULOS[id] || "Paso"));
+  const nombreFila = el("span", "paso-nombre");
+  ponerNombre(nombreFila, id, titulo || TITULOS[id] || "Paso");
+  li.appendChild(nombreFila);
   // Un paso inesperado se coloca en su lugar del recorrido, no al final.
   const orden = Object.keys(TITULOS);
   const mio = orden.indexOf(id);
@@ -303,7 +400,7 @@ function crearFila(id, titulo) {
     }
   }
   $("linea-tiempo").insertBefore(li, antes);
-  const fila = { li, avance: null };
+  const fila = { li, avance: null, vivo: null, claves: new Map() };
   filas.set(id, fila);
   return fila;
 }
@@ -315,7 +412,7 @@ function anunciar(texto) {
 function aplicarPaso(ev) {
   const fila = filas.get(ev.id) || crearFila(ev.id, ev.titulo);
   const nombre = ev.titulo || TITULOS[ev.id] || "Paso";
-  fila.li.querySelector(".paso-nombre").textContent = nombre;
+  ponerNombre(fila.li.querySelector(".paso-nombre"), ev.id, nombre);
   if (fila.avance) {
     fila.avance.remove();
     fila.avance = null;
@@ -332,10 +429,54 @@ function aplicarPaso(ev) {
     anunciar(`Listo: ${nombre}`);
     if (ev.id === "lectura") $("aviso-ocr-avance").hidden = true;
     if (ev.detalle && !fila.li.querySelector("details")) {
-      fila.li.appendChild(detallesDelPaso(ev.detalle));
-      estado.pasos.push({ titulo: nombre, resumen: ev.detalle.resumen || "", lineas: Array.isArray(ev.detalle.lineas) ? ev.detalle.lineas.map(normalizarLinea) : [] });
+      // Lo que se fue mostrando en vivo (consultas a la CIE-11, hallazgos por fuente) pasa a «Ver qué encontró», antes del resumen final.
+      const vivas = [...fila.claves.values(), ...(fila.sueltas || [])].map((x) => x.linea);
+      const extra = Array.isArray(ev.detalle.lineas) ? ev.detalle.lineas : [];
+      const detalle = { resumen: ev.detalle.resumen || "", lineas: [...vivas, ...extra.filter((l) => !vivas.some((v) => mismaLinea(v, l)))] };
+      limpiarVivo(fila);
+      fila.li.appendChild(detallesDelPaso(detalle));
+      if (ev.id !== "conexion") estado.pasos.push({ titulo: nombre, resumen: detalle.resumen, lineas: detalle.lineas.map(normalizarLinea) });
     }
   }
+}
+
+function mismaLinea(a, b) {
+  const x = normalizarLinea(a);
+  const y = normalizarLinea(b);
+  return JSON.stringify(x) === JSON.stringify(y);
+}
+
+function limpiarVivo(fila) {
+  if (fila.vivo) fila.vivo.remove();
+  fila.vivo = null;
+  fila.claves = new Map();
+  fila.sueltas = [];
+}
+
+/** Línea de avance dentro de un paso que sigue corriendo. Con `clave` se actualiza la línea que ya la tenía. */
+function aplicarDetalle(ev) {
+  const fila = filas.get(ev.paso);
+  if (!fila || ev.linea === undefined || ev.linea === null) return;
+  const linea = normalizarLinea(ev.linea);
+  if (typeof linea !== "string" && !linea.negrita && !linea.texto) return;
+  if (!fila.vivo) {
+    fila.vivo = el("ul", "paso-vivo");
+    fila.li.appendChild(fila.vivo);
+    fila.sueltas = [];
+  }
+  const clave = typeof ev.clave === "string" ? ev.clave : "";
+  const previa = clave ? fila.claves.get(clave) : null;
+  const li = previa ? previa.li : el("li");
+  vaciar(li);
+  if (typeof linea === "string") {
+    li.textContent = linea;
+  } else {
+    if (linea.negrita) li.appendChild(el("strong", "", linea.negrita));
+    if (linea.texto) li.appendChild(document.createTextNode(linea.negrita ? ` ${linea.texto}` : linea.texto));
+  }
+  if (!previa) fila.vivo.appendChild(li);
+  if (clave) fila.claves.set(clave, { li, linea });
+  else fila.sueltas.push({ li, linea });
 }
 
 function detallesDelPaso(detalle) {
@@ -406,7 +547,7 @@ async function enviar() {
 
   const datos = new FormData();
   if (estado.modo === "archivo") {
-    datos.append("archivo", estado.archivo.blob, estado.archivo.nombre);
+    for (const archivo of estado.archivos) datos.append("archivos", archivo.blob, archivo.nombre);
     datos.append("confirma_ocr", "true");
   } else {
     datos.append("texto", textoCaso());
@@ -456,6 +597,7 @@ async function leerFlujo(respuesta, senal, eventos) {
     for (const ev of nuevos) {
       eventos.push(ev);
       if (ev.tipo === "paso") aplicarPaso(ev);
+      else if (ev.tipo === "detalle") aplicarDetalle(ev);
     }
   };
   if (!respuesta.body || !respuesta.body.getReader) {
@@ -482,10 +624,10 @@ function recibirResultado(resultado) {
     irA("reporte");
   } else if (resultado.estado_final === "fuera_de_alcance") {
     mostrarFalla(
-      resultado.razon_amigable || "No pude reconocer un caso clínico en lo que compartiste. Revisa el texto, ajústalo y vuelve a intentar.",
+      resultado.razon_amigable || "Esto no parece ser un caso de psicología clínica. Revisa el texto, ajústalo y vuelve a intentar.",
       { reintentable: false, marcarPaso: false },
     );
-    $("titulo-avance").textContent = "Necesito un poco más";
+    $("titulo-avance").textContent = "No parece un caso de psicología clínica";
   } else {
     mostrarFalla(resultado.razon_amigable || "No se pudo completar el análisis. Puedes intentarlo de nuevo.", { reintentable: true });
   }
@@ -647,6 +789,13 @@ function dibujarReporte(reporte, advertencias) {
     cuerpo.appendChild(s);
   }
 
+  // Conclusión, recomendaciones y siguientes pasos
+  if (typeof reporte.conclusion === "string" && reporte.conclusion.trim()) {
+    const s = seccion("Conclusión, recomendaciones y siguientes pasos");
+    s.appendChild(el("p", "conclusion", reporte.conclusion.trim()));
+    cuerpo.appendChild(s);
+  }
+
   // Notas amables
   const notas = lista(advertencias);
   if (notas.length) {
@@ -725,7 +874,11 @@ function nuevoCaso() {
   cancelarEnvio();
   estado.reporte = null;
   estado.pasos = [];
-  estado.archivo = null;
+  estado.seleccion = [];
+  estado.archivos = [];
+  estado.procesando = false;
+  turnoArchivo++;
+  dibujarSeleccion();
   filas.clear();
   vaciar($("linea-tiempo"));
   vaciar($("cuerpo-reporte"));
@@ -758,7 +911,7 @@ function conectar() {
     actualizarBotonGenerar();
   });
   $("confirma-ocr").addEventListener("change", actualizarBotonGenerar);
-  $("archivo-caso").addEventListener("change", elegirArchivo);
+  $("archivo-caso").addEventListener("change", agregarArchivos);
   $("boton-generar").addEventListener("click", enviar);
   $("boton-reintentar").addEventListener("click", enviar);
   $("boton-editar").addEventListener("click", editarCaso);

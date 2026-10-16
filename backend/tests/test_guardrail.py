@@ -141,3 +141,46 @@ def test_instruccion_descarta_textos_con_ordenes_a_la_ia():
 
     assert "ÚNICAMENTE" in INSTRUCCION
     assert "instrucción" in INSTRUCCION and "IA" in INSTRUCCION
+
+
+# ----------------------------------------------------------------------------- segunda compuerta y ejemplos
+from psi_diag.guardrail import EJEMPLOS, INSTRUCCION, guardrail_combinado  # noqa: E402
+
+def test_la_instruccion_incluye_ejemplos_clinicos_y_no_clinicos():
+    for fragmento in ("mi perro", "comer sushi", "temperatura y vómito", "img 123 psicologia", "qué me recomiendas"):
+        assert fragmento in INSTRUCCION.lower()
+    assert any(es_clinico for _, es_clinico in EJEMPLOS) and not all(es_clinico for _, es_clinico in EJEMPLOS)
+
+
+def test_los_ejemplos_viajan_como_turnos_al_llm():
+    class Espia:
+        def invoke(self, mensajes):
+            self.mensajes = mensajes
+            return ClasificacionClinica(es_clinico=False)
+
+    espia = Espia()
+    assert guardrail_llm("texto nuevo", espia) == 0.0
+    assert espia.mensajes[-1] == ("human", "texto nuevo")
+    assert sum(1 for rol, _ in espia.mensajes if rol == "human") == len(EJEMPLOS) + 1
+
+
+def test_la_combinada_rechaza_si_jev_no_pasa_sin_llamar_al_llm():
+    class NoDebeLlamarse:
+        def invoke(self, mensajes):
+            raise AssertionError("no debía llamarse")
+
+    assert guardrail_combinado("x", lambda t: 0.2, NoDebeLlamarse(), 0.5) == 0.2
+
+
+def test_la_combinada_rechaza_si_jev_pasa_pero_el_llm_dice_que_no():
+    assert guardrail_combinado("x", lambda t: 0.9, ClasificadorFalso(False), 0.5) == 0.0
+
+
+def test_la_combinada_aprueba_si_ambos_aprueban_y_se_queda_con_jev_si_el_llm_falla():
+    assert guardrail_combinado("x", lambda t: 0.9, ClasificadorFalso(True), 0.5) == 0.9
+
+    class Roto:
+        def invoke(self, mensajes):
+            raise RuntimeError("sin red")
+
+    assert guardrail_combinado("x", lambda t: 0.9, Roto(), 0.5) == 0.9

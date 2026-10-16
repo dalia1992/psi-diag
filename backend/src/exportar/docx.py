@@ -40,11 +40,65 @@ def _estilos(documento) -> None:
     _fuente(normal, 12)
     normal.paragraph_format.line_spacing = 1.5
     normal.paragraph_format.space_after = Pt(4)
-    for nombre, tamano in (("Title", 22), ("Heading 1", 16), ("Heading 2", 14), ("Heading 3", 12)):
+    for nombre, tamano in (("Title", 22), ("Subtitle", 14), ("Heading 1", 16), ("Heading 2", 14), ("Heading 3", 12)):
         _fuente(documento.styles[nombre], tamano, negrita=True, color=AZUL)
         documento.styles[nombre].paragraph_format.line_spacing = 1.5
     _fuente(documento.styles["List Bullet"], 12)
     documento.styles["List Bullet"].paragraph_format.line_spacing = 1.5
+
+
+def _corrida_de_campo(tipo: str, sucio: bool = False):
+    corrida, marca = OxmlElement("w:r"), OxmlElement("w:fldChar")
+    marca.set(qn("w:fldCharType"), tipo)
+    if sucio:   # Word recalcula el campo (números de página incluidos) al abrir el archivo, sin preguntar
+        marca.set(qn("w:dirty"), "true")
+    corrida.append(marca)
+    return corrida
+
+
+def _marcar(parrafo, numero: int) -> str:
+    """Marcador oculto (_Toc…) que abarca el título: es el destino de la liga del índice."""
+    nombre = f"_Toc{100000 + numero}"
+    inicio, fin = OxmlElement("w:bookmarkStart"), OxmlElement("w:bookmarkEnd")
+    inicio.set(qn("w:id"), str(numero))
+    inicio.set(qn("w:name"), nombre)
+    fin.set(qn("w:id"), str(numero))
+    propiedades = parrafo._p.pPr
+    parrafo._p.insert(0 if propiedades is None else 1, inicio)
+    parrafo._p.append(fin)
+    return nombre
+
+
+def _insertar_indice(documento, ancla, entradas: list) -> None:
+    """Índice como campo TOC de Word (títulos 1 y 2) justo después de `ancla`. Se rellena con los títulos, ligados a sus marcadores,
+    para que se vea y navegue aunque el visor no recalcule campos; Word lo actualiza con los números de página al abrir."""
+    parrafos = []
+    for i, (nivel, titulo, marcador) in enumerate(entradas):
+        parrafo = documento.add_paragraph()
+        parrafo.paragraph_format.line_spacing = 1.15
+        parrafo.paragraph_format.space_after = Pt(2)
+        if nivel > 1:
+            parrafo.paragraph_format.left_indent = Pt(20)
+        if i == 0:
+            instruccion = OxmlElement("w:r")
+            texto_instruccion = OxmlElement("w:instrText")
+            texto_instruccion.set(qn("xml:space"), "preserve")
+            texto_instruccion.text = ' TOC \\o "1-2" \\h \\z \\u '
+            instruccion.append(texto_instruccion)
+            for hijo in (_corrida_de_campo("begin", sucio=True), instruccion, _corrida_de_campo("separate")):
+                parrafo._p.append(hijo)
+        enlace = OxmlElement("w:hyperlink")
+        enlace.set(qn("w:anchor"), marcador)
+        enlace.set(qn("w:history"), "1")
+        corrida = parrafo.add_run(titulo)
+        corrida.font.color.rgb = AZUL
+        enlace.append(corrida._r)
+        parrafo._p.append(enlace)
+        if i == len(entradas) - 1:
+            parrafo._p.append(_corrida_de_campo("end"))
+        parrafos.append(parrafo)
+    for parrafo in reversed(parrafos):
+        ancla._p.addnext(parrafo._p)
 
 
 def _liga(parrafo, url: str, etiqueta: str) -> None:
@@ -99,22 +153,32 @@ def generar_docx(reporte: dict) -> bytes:
         seccion.left_margin = seccion.right_margin = Pt(72)
 
     documento.add_paragraph(comun.NOMBRE_APP, style="Title")
-    documento.add_paragraph("Reporte de apoyo al psicodiagnóstico", style="Heading 2")
+    documento.add_paragraph("Reporte de apoyo al psicodiagnóstico", style="Subtitle")   # no es título 1 ni 2: no entra al índice
+    ancla_indice = documento.add_paragraph()
+    ancla_indice.add_run("Índice").bold = True
+    ancla_indice.runs[0].font.size = Pt(14)
+    ancla_indice.runs[0].font.color.rgb = AZUL
+    entradas: list = []
 
-    documento.add_heading("1. Datos del caso", level=1)
+    def encabezado(titulo: str, nivel: int) -> None:
+        parrafo = documento.add_heading(titulo, level=nivel)
+        if nivel <= 2:
+            entradas.append((nivel, titulo, _marcar(parrafo, len(entradas) + 1)))
+
+    encabezado("1. Datos del caso", 1)
     for rotulo, valor in comun.datos_del_caso(reporte):
         _negrita_y_texto(documento, f"{rotulo}:", valor)
 
-    documento.add_heading("2. Síntomas por categoría", level=1)
+    encabezado("2. Síntomas por categoría", 1)
     sintomas = dicc(reporte.get("sintomas"))
     for etiqueta, clave in comun.ETIQUETAS_SINTOMAS:
-        documento.add_heading(etiqueta, level=2)
+        encabezado(etiqueta, 3)   # categorías de síntomas: no van al índice
         _vinetas(documento, sintomas.get(clave), "Ninguno identificado")
 
-    documento.add_heading("3. Hipótesis diagnósticas (de la más a la menos plausible)", level=1)
+    encabezado("3. Hipótesis diagnósticas (de la más a la menos plausible)", 1)
     hipotesis = lista_de_dicts(reporte.get("hipotesis"))
     for i, h in enumerate(hipotesis, 1):
-        documento.add_heading(f"{i}. {mayuscula_inicial(h.get('titulo')) or 'Sin título'} — {texto(h.get('codigo')) or 'sin código'}", level=2)
+        encabezado(f"{i}. {mayuscula_inicial(h.get('titulo')) or 'Sin título'} — {texto(h.get('codigo')) or 'sin código'}", 2)
         _con_liga(documento, "Abrir en el navegador OMS", h.get("url"))
         _negrita_y_texto(documento, "Justificación:", mayuscula_inicial(h.get("justificacion")) or "No indicada")
         documento.add_paragraph().add_run("Criterios cumplidos:").bold = True
@@ -124,22 +188,22 @@ def generar_docx(reporte: dict) -> bytes:
     if not hipotesis:
         documento.add_paragraph("Sin hipótesis diagnósticas.")
     if lista(reporte.get("ambiguedades")):
-        documento.add_heading("Ambigüedades", level=2)
+        encabezado("Ambigüedades", 2)
         _vinetas(documento, reporte.get("ambiguedades"))
 
-    documento.add_heading("4. Diferenciales y exclusiones", level=1)
+    encabezado("4. Diferenciales y exclusiones", 1)
     _vinetas(documento, reporte.get("diferenciales"), NINGUNO)
     alternativas = lista_de_dicts(reporte.get("alternativas"))
     if alternativas:
-        documento.add_heading("Alternativas consultadas y descartadas", level=2)
+        encabezado("Alternativas consultadas y descartadas", 2)
         for a in alternativas:
             _con_liga(documento, "OMS", a.get("url"), "", "List Bullet",
                       f"{mayuscula_inicial(a.get('titulo')) or 'Sin título'} ({texto(a.get('codigo')) or 'sin código'}) — ")
 
-    documento.add_heading("5. Datos faltantes por recabar", level=1)
+    encabezado("5. Datos faltantes por recabar", 1)
     _vinetas(documento, reporte.get("datos_faltantes"), NINGUNO)
 
-    documento.add_heading("6. Pruebas complementarias sugeridas", level=1)
+    encabezado("6. Pruebas complementarias sugeridas", 1)
     _nota(documento, "Sugerencias a validar por el profesional. Solo se indica el nombre de la prueba: "
                      "no se incluyen cuestionarios ni formas de calificación.")
     guias = lista_de_dicts(reporte.get("guias"))
@@ -163,7 +227,7 @@ def generar_docx(reporte: dict) -> bytes:
         documento.add_paragraph("Ninguna sugerida", style="List Bullet")
 
     if guias:
-        documento.add_heading("Guías clínicas consultadas", level=2)
+        encabezado("Guías clínicas consultadas", 2)
         _nota(documento, "Referencias para consulta del profesional; el sistema no recomienda tratamientos.")
         etiquetas = list(dict.fromkeys(texto(g.get("etiqueta")) or texto(g.get("tipo")) or "Otras" for g in guias))
         for etiqueta in etiquetas:
@@ -174,8 +238,15 @@ def generar_docx(reporte: dict) -> bytes:
                 cita = texto(g.get("cita"))
                 _con_liga(documento, texto(g.get("titulo")) or "Guía", g.get("url"), f" — «{cita}»" if cita else "", "List Bullet")
 
-    documento.add_heading("7. Aviso", level=1)
+    numero = 7
+    conclusion = texto(reporte.get("conclusion"))
+    if conclusion:
+        encabezado(f"{numero}. Conclusión, recomendaciones y siguientes pasos", 1)
+        documento.add_paragraph(conclusion)
+        numero += 1
+    encabezado(f"{numero}. Aviso", 1)
     documento.add_paragraph(texto(reporte.get("aviso")))
+    _insertar_indice(documento, ancla_indice, entradas)
     salida = io.BytesIO()
     documento.save(salida)
     return salida.getvalue()

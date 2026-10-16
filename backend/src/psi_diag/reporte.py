@@ -148,6 +148,7 @@ def construir_datos(
             for g in (guias or [])
             if g.get("tipo", "apa") == tipo
         ],
+        "conclusion": (reporte.conclusion or "").strip(),
         "aviso": AVISO,
     }
 
@@ -208,8 +209,12 @@ def render_markdown(
             if grupo:
                 partes.append(f"**{etiqueta}**")
                 partes.append("\n".join(f"- [{g['titulo']}]({g['url']})" + (f" — «{g['cita']}»" if g.get("cita") else "") for g in grupo))
+    numero = 7
+    if (reporte.conclusion or "").strip():
+        partes += [f"## {numero}. Conclusión, recomendaciones y siguientes pasos", reporte.conclusion.strip()]
+        numero += 1
     partes += [
-        "## 7. Aviso",
+        f"## {numero}. Aviso",
         AVISO,
     ]
     return "\n\n".join(partes) + "\n"

@@ -342,7 +342,7 @@ async def test_texto_no_clinico_termina_con_fuera_de_alcance_sin_pasos_siguiente
     assert _pares(eventos) == [("proteccion", "en_curso"), ("proteccion", "listo"),
                                ("verificacion", "en_curso"), ("verificacion", "listo")]
     r = eventos[-1]["resultado"]
-    assert r["estado_final"] == "fuera_de_alcance" and "caso clínico" in r["razon_amigable"]
+    assert r["estado_final"] == "fuera_de_alcance" and "psicología clínica" in r["razon_amigable"]
     assert espia.llamadas["extraer"] == 0
 
 
@@ -383,3 +383,30 @@ async def test_cancelar_el_generador_no_deja_tareas_colgadas():
     await gen.aclose()
     await asyncio.sleep(0)
     assert vistos and set(asyncio.all_tasks()) <= antes
+
+
+# ----------------------------------------------------------------------------- avance dentro de un paso
+async def test_los_detalle_de_un_paso_salen_antes_de_que_el_paso_termine():
+    from psi_diag import progreso
+
+    def guias(candidatos, sintomas):
+        progreso.detalle("guias", "buscando…", negrita="IMSS:", clave="imss")   # desde el hilo del nodo síncrono
+        progreso.detalle("guias", "1 relevante(s)", negrita="IMSS:", clave="imss")
+        return []
+
+    c, _ = construir(guias=guias)
+    eventos = [e async for e in ejecutar_eventos(ENTRADA, c)]
+    tipos = [(e["tipo"], e.get("id") or e.get("paso")) for e in eventos]
+    i_primero = tipos.index(("detalle", "guias"))
+    i_listo = next(i for i, e in enumerate(eventos) if e["tipo"] == "paso" and e["id"] == "guias" and e["estado"] == "listo")
+    assert i_primero < i_listo
+    assert [e["linea"]["texto"] for e in eventos if e["tipo"] == "detalle"] == ["buscando…", "1 relevante(s)"]
+    assert eventos[-1]["tipo"] == "resultado" and eventos[-1]["resultado"]["estado_final"] == "ok"
+
+
+async def test_las_consultas_a_la_cie11_se_avisan_mientras_el_agente_busca():
+    from psi_diag.agente import consulta_de
+
+    assert consulta_de({"query": {"termino": "depresión"}}) == "depresión"
+    assert consulta_de({"uri": "http://id.who.int/icd/entity/1"}) == ""
+    assert consulta_de({"sintomas": ["tristeza", "insomnio"]}) == "tristeza; insomnio"

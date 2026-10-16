@@ -127,7 +127,18 @@ input[type="file"] { font: inherit; max-width: 100%; }
 .paso.en-curso .paso-nombre { font-weight: 700; }
 .paso.fallo { color: var(--error); }
 .paso.fallo::before { background: var(--error); border-color: var(--error); }
+.paso .paso-nombre:has(strong) { font-weight: 400; } /* en el paso de las guías, solo IMSS, APA y OMS van en negritas */
+.paso-nombre strong { font-weight: 700; color: var(--azul); }
 .paso-avance { margin: 0; font-size: .95rem; color: var(--apoyo); }
+
+.paso-vivo { list-style: none; margin: .25rem 0 0; padding: 0 0 0 .1rem; font-size: .95rem; color: #3d4366; }
+.paso-vivo li { margin-bottom: .15rem; overflow-wrap: anywhere; }
+.paso.en-curso .paso-avance::after { content: ""; display: inline-block; width: .9em; height: .9em; margin-left: .5em; vertical-align: -.1em; border: 2px solid var(--lavanda-linea); border-top-color: var(--azul); border-radius: 50%; }
+.lista-archivos { list-style: none; margin: .75rem 0 0; padding: 0; }
+.archivo-elegido { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; padding: .35rem 0; border-bottom: 1px solid var(--lavanda-linea); }
+.archivo-nombre { font-weight: 600; overflow-wrap: anywhere; }
+.boton-chico { padding: .15rem .8rem; min-height: 32px; font-size: .9rem; margin-left: auto; }
+.conclusion { white-space: pre-line; }
 
 details { margin: 2px 0 0; }
 summary { cursor: pointer; color: var(--lavanda-texto); font-size: .95rem; font-weight: 600; list-style: none; padding: 4px 0; }
@@ -160,5 +171,7 @@ a:hover { color: var(--lavanda-texto); }
 }
 @media (prefers-reduced-motion: no-preference) {
   .paso.en-curso::before { animation: pulso 1.6s ease-in-out infinite; }
+  .paso.en-curso .paso-avance::after { animation: girar 1s linear infinite; }
 }
+@keyframes girar { to { transform: rotate(360deg); } }
 @keyframes pulso { 50% { box-shadow: 0 0 0 7px var(--lavanda-suave); } }

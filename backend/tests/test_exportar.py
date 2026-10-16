@@ -108,7 +108,8 @@ def test_pdf_incrusta_nunito():
 
 def test_pdf_tiene_ligas_clicables():
     lector = PdfReader(io.BytesIO(generar_pdf(reporte_completo())))
-    destinos = {a.get_object()["/A"]["/URI"] for p in lector.pages for a in p.get("/Annots", [])}
+    anotaciones = [a.get_object() for p in lector.pages for a in p.get("/Annots", [])]
+    destinos = {a["/A"]["/URI"] for a in anotaciones if "/A" in a}   # las del índice son internas (/Dest), sin URI
     assert "https://icd.who.int/browse/2024-01/mms/es#1001" in destinos
     assert "https://www.imss.gob.mx/guias/depresion" in destinos
 
@@ -173,7 +174,7 @@ def test_docx_conserva_el_texto_hostil_como_texto_y_sin_ligas_peligrosas():
 def test_pdf_no_crea_ligas_peligrosas_y_muestra_el_texto_hostil():
     datos = generar_pdf(reporte_hostil())
     lector = PdfReader(io.BytesIO(datos))
-    destinos = [str(a.get_object()["/A"]["/URI"]) for p in lector.pages for a in p.get("/Annots", [])]
+    destinos = [str(a.get_object()["/A"]["/URI"]) for p in lector.pages for a in p.get("/Annots", []) if "/A" in a.get_object()]
     assert not any(d.startswith("javascript:") for d in destinos)
     assert "<script>alert(1)</script>" in texto_pdf(datos)
 
@@ -326,3 +327,71 @@ def test_docx_lleva_metadatos_propios_y_no_los_de_la_plantilla():
     ahora = datetime.now(timezone.utc)
     for marca in (propiedades.created, propiedades.modified):
         assert abs(ahora - marca) < timedelta(minutes=5)
+
+
+# ----------------------------------------------------------------------------- conclusión e índices
+def reporte_con_conclusion() -> dict:
+    r = reporte_completo()
+    r["conclusion"] = "Resumen del cuadro y siguientes pasos para el profesional."
+    return r
+
+
+def titulos_del_panel(lector) -> list:
+    def recorrer(items):
+        for x in items:
+            if isinstance(x, list):
+                yield from recorrer(x)
+            else:
+                yield x.title, lector.get_destination_page_number(x) + 1
+    return list(recorrer(lector.outline))
+
+
+def test_pdf_tiene_indice_con_ligas_y_marcadores_en_la_pagina_correcta():
+    lector = PdfReader(io.BytesIO(generar_pdf(reporte_con_conclusion())))
+    texto = lector.pages[0].extract_text()
+    assert "Índice" in texto and "1. Datos del caso" in texto and "Conclusión, recomendaciones y siguientes pasos" in texto
+    panel = dict(titulos_del_panel(lector))
+    assert "1. Datos del caso" in panel and "8. Aviso" in panel
+    assert panel["1. Datos del caso"] >= 2 and panel["8. Aviso"] >= panel["1. Datos del caso"]
+    assert panel["8. Aviso"] == len(lector.pages)   # el aviso cierra el documento
+    internas = [a.get_object() for a in lector.pages[0].get("/Annots", []) if "/Dest" in a.get_object()]
+    assert len(internas) >= 8   # una liga por entrada del índice
+
+
+def test_pdf_largo_apunta_cada_titulo_a_su_pagina():
+    r = reporte_con_conclusion()
+    r["datos_faltantes"] = [f"Dato faltante número {i} con texto de relleno suficiente para ocupar espacio" for i in range(150)]
+    panel = dict(titulos_del_panel(PdfReader(io.BytesIO(generar_pdf(r)))))
+    assert panel["5. Datos faltantes por recabar"] < panel["6. Pruebas complementarias sugeridas"] <= panel["8. Aviso"]
+
+
+def test_pdf_con_titulos_hostiles_no_rompe_el_indice():
+    assert generar_pdf(reporte_hostil()).startswith(b"%PDF")
+
+
+def test_la_conclusion_aparece_en_pdf_y_word_antes_del_aviso():
+    r = reporte_con_conclusion()
+    assert "Resumen del cuadro y siguientes pasos" in texto_pdf(generar_pdf(r))
+    palabra = texto_docx(generar_docx(r))
+    assert palabra.index("7. Conclusión, recomendaciones y siguientes pasos") < palabra.index("8. Aviso")
+    assert "Resumen del cuadro y siguientes pasos" in palabra
+
+
+def test_sin_conclusion_el_aviso_sigue_siendo_la_seccion_7():
+    r = reporte_completo()
+    r.pop("conclusion", None)
+    assert "7. Aviso" in texto_docx(generar_docx(r))
+    assert "7. Aviso" in texto_pdf(generar_pdf(r))
+
+
+def test_word_tiene_campo_de_indice_con_ligas_a_los_titulos():
+    documento = Document(io.BytesIO(generar_docx(reporte_con_conclusion())))
+    xml = documento.element.xml
+    assert 'TOC \\o "1-2" \\h \\z \\u' in xml and 'w:dirty="true"' in xml
+    assert xml.count("w:fldCharType=\"begin\"") == 1 and xml.count("w:fldCharType=\"end\"") == 1
+    anclas = set(re.findall(r'w:hyperlink w:anchor="(_Toc\d+)"', xml))
+    marcadores = set(re.findall(r'w:bookmarkStart [^>]*w:name="(_Toc\d+)"', xml))
+    assert anclas and anclas == marcadores
+    titulos = [p.text for p in documento.paragraphs if p.style.name.startswith("Heading") and p.style.name != "Heading 3"]
+    assert "1. Datos del caso" in titulos
+    assert "Reporte de apoyo al psicodiagnóstico" not in titulos   # el subtítulo no entra al índice

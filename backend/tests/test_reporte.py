@@ -216,7 +216,7 @@ def test_construir_datos_tiene_las_claves_del_contrato():
     finales, _ = validar_hipotesis(rep, CANDIDATOS)
     d = construir_datos(SINTOMAS, finales, rep, ALTERNATIVAS, date(2026, 10, 15), guias, validar_pruebas(rep.pruebas, guias)[0])
     assert set(d) == {"fecha", "caso", "sintomas", "hipotesis", "ambiguedades", "diferenciales", "alternativas",
-                      "datos_faltantes", "pruebas", "guias", "aviso"}
+                      "datos_faltantes", "pruebas", "guias", "conclusion", "aviso"}
     assert d["fecha"] == "2026-10-15"
     assert d["caso"] == {"paciente_ref": "[PER_1]", "edad": 34, "sexo": "femenino", "temporalidad": "4 meses"}
     assert set(d["sintomas"]) == {"cognitivos", "emocionales", "conductuales", "afectacion_social"}
