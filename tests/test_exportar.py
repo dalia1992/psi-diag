@@ -176,3 +176,108 @@ def test_pdf_no_crea_ligas_peligrosas_y_muestra_el_texto_hostil():
     destinos = [str(a.get_object()["/A"]["/URI"]) for p in lector.pages for a in p.get("/Annots", [])]
     assert not any(d.startswith("javascript:") for d in destinos)
     assert "<script>alert(1)</script>" in texto_pdf(datos)
+
+
+# ----------------------------------------------------------------------------- API
+import logging  # noqa: E402
+
+from fastapi.testclient import TestClient  # noqa: E402
+
+import app as modulo_app  # noqa: E402
+
+TIPOS = {
+    "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "pdf": "application/pdf",
+}
+
+
+@pytest.fixture(autouse=True)
+def entorno_api(monkeypatch):
+    for variable in ("ACCESS_CODE", "VERCEL"):
+        monkeypatch.delenv(variable, raising=False)
+    modulo_app._visitas.clear()
+    modulo_app._fallos.clear()
+
+
+@pytest.fixture
+def cliente():
+    return TestClient(modulo_app.app)
+
+
+@pytest.mark.parametrize("formato", ["docx", "pdf"])
+def test_api_devuelve_el_archivo_con_sus_cabeceras(cliente, formato):
+    r = cliente.post(f"/api/exportar/{formato}", json=reporte_demo())
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith(TIPOS[formato])
+    assert r.headers["content-disposition"] == f'attachment; filename="reporte-2026-10-15.{formato}"'
+    assert r.headers["cache-control"] == "no-store"
+    assert r.headers["x-content-type-options"] == "nosniff"
+    if formato == "pdf":
+        assert r.content.startswith(b"%PDF")
+    else:
+        Document(io.BytesIO(r.content))
+
+
+def test_api_fecha_invalida_usa_la_de_hoy_y_no_filtra_texto_al_nombre(cliente):
+    from datetime import date
+    r = cliente.post("/api/exportar/pdf", json={**reporte_demo(), "fecha": '"; evil=1\r\n'})
+    assert r.headers["content-disposition"] == f'attachment; filename="reporte-{date.today().isoformat()}.pdf"'
+
+
+@pytest.mark.parametrize("formato", ["md", "html", "DOCX", "docx.exe"])
+def test_api_otro_formato_responde_404_con_la_forma_de_error(cliente, formato):
+    r = cliente.post(f"/api/exportar/{formato}", json=reporte_demo())
+    assert r.status_code == 404
+    cuerpo = r.json()
+    assert cuerpo["ok"] is False and cuerpo["error"]["codigo"] == "validacion"
+
+
+def test_api_exige_el_codigo_de_acceso(cliente, monkeypatch):
+    monkeypatch.setenv("ACCESS_CODE", "secreto")
+    assert cliente.post("/api/exportar/pdf", json=reporte_demo()).status_code == 401
+    assert cliente.post("/api/exportar/pdf", json=reporte_demo(), headers={"x-access-code": "mal"}).status_code == 401
+    assert cliente.post("/api/exportar/pdf", json=reporte_demo(), headers={"x-access-code": "secreto"}).status_code == 200
+
+
+def test_api_intentos_con_codigo_incorrecto_terminan_en_429(cliente, monkeypatch):
+    monkeypatch.setenv("ACCESS_CODE", "secreto")
+    codigos = [cliente.post("/api/exportar/pdf", json=reporte_demo(), headers={"x-access-code": "mal"}).status_code for _ in range(7)]
+    assert codigos[:5] == [401] * 5 and codigos[-1] == 429
+
+
+def test_api_limita_solicitudes_por_minuto(cliente, monkeypatch):
+    monkeypatch.setattr(modulo_app, "MAX_POR_MINUTO", 2)
+    codigos = [cliente.post("/api/exportar/docx", json=reporte_demo()).status_code for _ in range(3)]
+    assert codigos == [200, 200, 429]
+
+
+def test_api_rechaza_cuerpo_mayor_a_200_kb(cliente):
+    grande = {**reporte_demo(), "relleno": "x" * 200_001}
+    r = cliente.post("/api/exportar/pdf", json=grande)
+    assert r.status_code == 413 and r.json()["error"]["codigo"] == "validacion"
+
+
+@pytest.mark.parametrize("cuerpo", [b"no es json", b"[1, 2]", b'"texto"', b"{}", b'{"caso": {}}', b""])
+def test_api_rechaza_cuerpos_que_no_son_un_reporte(cliente, cuerpo):
+    r = cliente.post("/api/exportar/docx", content=cuerpo, headers={"content-type": "application/json"})
+    assert r.status_code == 400 and r.json()["error"]["codigo"] == "validacion"
+
+
+def test_api_acepta_texto_hostil(cliente):
+    assert cliente.post("/api/exportar/pdf", json=reporte_hostil()).status_code == 200
+    assert cliente.post("/api/exportar/docx", json=reporte_hostil()).status_code == 200
+
+
+def test_api_no_registra_el_contenido_del_reporte(cliente, caplog):
+    r = reporte_demo()
+    r["caso"]["paciente_ref"] = "NOMBRE-SECRETO-XYZ"
+    with caplog.at_level(logging.INFO, logger="psico"):
+        modulo_app.log.propagate = True
+        try:
+            assert cliente.post("/api/exportar/pdf", json=r).status_code == 200
+        finally:
+            modulo_app.log.propagate = False
+    salida = " ".join(caplog.messages)
+    assert "NOMBRE-SECRETO-XYZ" not in salida and "Laura" not in salida
+    linea = json.loads(caplog.messages[-1])
+    assert linea["formato"] == "pdf" and set(linea) == {"id", "formato", "ms", "estado"}

@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any, AsyncIterator
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 from starlette.background import BackgroundTask
 
 from errores_api import ErrorApi, cuerpo_error, limpiar_texto, respuesta_error
@@ -33,6 +33,12 @@ MIN_TEXTO, MAX_TEXTO = 20, 8000
 MAX_BYTES_ARCHIVO = 4_000_000
 MAX_PAGINAS_PDF = 10
 PING_S = 15
+MAX_BYTES_REPORTE = 200_000   # cuerpo máximo de POST /api/exportar
+CLAVES_REPORTE = ("caso", "sintomas", "hipotesis", "aviso")   # lo mínimo para aceptar el JSON como reporte
+FORMATOS_EXPORTAR = {
+    "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "pdf": "application/pdf",
+}
 FIRMAS = {".jpg": (b"\xff\xd8\xff",), ".jpeg": (b"\xff\xd8\xff",), ".png": (b"\x89PNG",), ".pdf": (b"%PDF-",)}
 FIXTURE_DEMO = Path(__file__).parent / "tests" / "fixtures" / "eventos_demo.json"
 
@@ -388,3 +394,57 @@ async def caso(request: Request):
             ruta.unlink(missing_ok=True)
         registrar(id=id_solicitud, estado="backend", ms=milisegundos(inicio), via=via, error=type(e).__name__)
         return responder(respuesta_error(ErrorApi("backend", "Error inesperado en la función.", 500, type(e).__name__), id_solicitud, BACKEND), 500)
+
+
+# ----------------------------------------------------------------------------- exportación
+async def leer_reporte(request: Request) -> dict:
+    """Cuerpo JSON del reporte: tope de tamaño (aun sin Content-Length), objeto con las claves mínimas."""
+    declarado = request.headers.get("content-length", "")
+    if declarado.isdigit() and int(declarado) > MAX_BYTES_REPORTE:
+        raise ErrorApi("validacion", "El reporte es demasiado grande para exportarlo.", 413, f"más de {MAX_BYTES_REPORTE} bytes")
+    partes, total = [], 0
+    async for trozo in request.stream():
+        total += len(trozo)
+        if total > MAX_BYTES_REPORTE:
+            raise ErrorApi("validacion", "El reporte es demasiado grande para exportarlo.", 413, f"más de {MAX_BYTES_REPORTE} bytes")
+        partes.append(trozo)
+    try:
+        reporte = json.loads(b"".join(partes))
+    except ValueError:
+        raise ErrorApi("validacion", "El reporte no es un JSON válido.", 400, "cuerpo no es JSON") from None
+    if not isinstance(reporte, dict) or any(clave not in reporte for clave in CLAVES_REPORTE):
+        raise ErrorApi("validacion", "El reporte no tiene la forma esperada.", 400, "faltan claves del reporte")
+    return reporte
+
+
+@app.post("/api/exportar/{formato}")
+async def exportar(formato: str, request: Request):
+    inicio = time.perf_counter()
+    id_solicitud = uuid.uuid4().hex[:8]
+    estado = "ok"
+    try:
+        limitar(ip_de(request))
+        revisar_acceso(request)
+        if formato not in FORMATOS_EXPORTAR:
+            raise ErrorApi("validacion", "Formato no disponible: usa docx o pdf.", 404, "formato no reconocido")
+        reporte = await leer_reporte(request)
+        from exportar.comun import fecha_iso   # importación diferida: reportlab y python-docx pesan en el arranque
+        if formato == "docx":
+            from exportar.docx import generar_docx as generar
+        else:
+            from exportar.pdf import generar_pdf as generar
+        datos = await asyncio.to_thread(generar, reporte)
+        cabeceras = {
+            "Content-Disposition": f'attachment; filename="reporte-{fecha_iso(reporte)}.{formato}"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        }
+        return Response(datos, media_type=FORMATOS_EXPORTAR[formato], headers=cabeceras)
+    except ErrorApi as e:
+        estado = e.codigo
+        return responder(respuesta_error(e, id_solicitud, BACKEND), e.status)
+    except Exception as e:  # noqa: BLE001  el mensaje de la excepción podría traer texto del reporte: no se registra
+        estado = "backend"
+        return responder(respuesta_error(ErrorApi("backend", "No se pudo generar el archivo.", 500, type(e).__name__), id_solicitud, BACKEND), 500)
+    finally:
+        registrar(id=id_solicitud, formato=formato if formato in FORMATOS_EXPORTAR else "otro", ms=milisegundos(inicio), estado=estado)
