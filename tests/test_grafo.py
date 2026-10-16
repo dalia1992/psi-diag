@@ -5,7 +5,7 @@ import pytest
 
 from poc_psico.errores import FlujoDetenido
 from poc_psico.esquemas import HipotesisRedactada, PruebaSugerida, ReporteClinico
-from poc_psico.grafo import Componentes, ejecutar
+from poc_psico.grafo import Componentes, ejecutar, ejecutar_eventos
 from tests.helpers import mensajes_con_error, mensajes_exitosos, mensajes_sin_resultados
 
 ENTRADA = "Laura Mendoza, mujer de 34 años, vive en Guadalajara. Refiere tristeza y falta al trabajo."
@@ -294,3 +294,88 @@ async def test_ejecutar_devuelve_reporte_con_nombres_reinsertados():
     assert rep["caso"]["paciente_ref"] == "Laura Mendoza" and rep["fecha"] == "2026-10-15"
     assert rep["hipotesis"][0]["codigo"] == "6A70"
     assert "[PER_1]" not in json.dumps(rep, ensure_ascii=False)
+
+
+# --- ejecutar_eventos ---
+
+async def _recolectar(entrada, c):
+    return [e async for e in ejecutar_eventos(entrada, c)]
+
+
+def _pares(eventos):
+    return [(e["id"], e["estado"]) for e in eventos if e["tipo"] == "paso"]
+
+
+async def test_eventos_en_orden_y_un_solo_resultado():
+    c, _ = construir()
+    eventos = await _recolectar(ENTRADA, c)
+    esperado = [(p, s) for p in ("proteccion", "verificacion", "sintomas", "cie11", "guias", "reporte") for s in ("en_curso", "listo")]
+    assert _pares(eventos) == esperado  # "lectura" ausente con texto
+    assert [e["tipo"] for e in eventos].count("resultado") == 1 and eventos[-1]["tipo"] == "resultado"
+    for e in eventos[:-1]:
+        assert ("detalle" in e) == (e["estado"] == "listo") and e["titulo"]
+        if e["estado"] == "listo":
+            assert set(e["detalle"]) == {"resumen", "lineas"}
+    r = eventos[-1]["resultado"]
+    assert r["estado_final"] == "ok" and r["reporte"] and "Laura Mendoza" in r["reporte_md"]
+    visibles = json.dumps(eventos[:-1], ensure_ascii=False)
+    assert "Laura" not in visibles and "Mendoza" not in visibles and "Guadalajara" not in visibles
+
+
+async def test_archivo_incluye_lectura_con_el_texto_leido():
+    c, _ = construir(ocr=lambda ruta: ENTRADA)
+    eventos = await _recolectar(FOTO, c)
+    pares = _pares(eventos)
+    assert pares[:2] == [("lectura", "en_curso"), ("lectura", "listo")] and pares[2] == ("proteccion", "en_curso")
+    lectura = [e for e in eventos if e.get("id") == "lectura" and e["estado"] == "listo"][0]
+    assert ENTRADA in lectura["detalle"]["lineas"]
+    assert eventos[-1]["resultado"]["texto_ocr"] == ENTRADA
+
+
+async def test_texto_no_clinico_termina_con_fuera_de_alcance_sin_pasos_siguientes():
+    c, espia = construir(guardrail=lambda t: 0.1)
+    eventos = await _recolectar("Receta de pan amasado", c)
+    assert _pares(eventos) == [("proteccion", "en_curso"), ("proteccion", "listo"),
+                               ("verificacion", "en_curso"), ("verificacion", "listo")]
+    r = eventos[-1]["resultado"]
+    assert r["estado_final"] == "fuera_de_alcance" and "caso clínico" in r["razon_amigable"]
+    assert espia.llamadas["extraer"] == 0
+
+
+async def test_falla_del_cie11_termina_con_error_y_razon_amigable():
+    async def agente(sintomas):
+        return mensajes_con_error()
+
+    c, _ = construir(busqueda_cie11=agente)
+    eventos = await _recolectar(ENTRADA, c)
+    assert ("cie11", "en_curso") in _pares(eventos) and ("cie11", "listo") not in _pares(eventos)
+    r = eventos[-1]["resultado"]
+    assert r["estado_final"] == "error" and r["razon_amigable"]
+    for tecnico in ("icd11", "Flujo", "Exception", "tools", "Error"):
+        assert tecnico not in r["razon_amigable"]
+    assert "icd11" in r["razon"]  # la razón técnica se conserva para el registro
+
+
+async def test_error_inesperado_tiene_razon_amigable_generica():
+    def extraer(texto):
+        raise RuntimeError("429 rate limit")
+
+    c, _ = construir(extraer=extraer)
+    r = (await _recolectar(ENTRADA, c))[-1]["resultado"]
+    assert r["estado_final"] == "error" and "429" not in r["razon_amigable"] and "RuntimeError" not in r["razon_amigable"]
+
+
+async def test_cancelar_el_generador_no_deja_tareas_colgadas():
+    import asyncio
+
+    antes = set(asyncio.all_tasks())
+    c, _ = construir()
+    gen = ejecutar_eventos(ENTRADA, c)
+    vistos = []
+    async for e in gen:
+        vistos.append(e)
+        if e["id"] == "sintomas" and e["estado"] == "listo":
+            break
+    await gen.aclose()
+    await asyncio.sleep(0)
+    assert vistos and set(asyncio.all_tasks()) <= antes
