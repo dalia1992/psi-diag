@@ -9,7 +9,7 @@ from .reintentos import con_reintentos_503
 URL_OPENROUTER = "https://openrouter.ai/api/v1/chat/completions"
 URL_DECISIONS = "https://openrouter.ai/api/alpha/decisions"
 # Preferencia de privacidad de OpenRouter (campo `provider` del cuerpo): solo enrutar a proveedores que no guarden ni
-# entrenen con los datos. Va en las peticiones de chat; la Decisions API (alpha) no documenta ese campo y no la lleva.
+# entrenen con los datos. Va en las peticiones de chat; la Decisions API (alpha) no está confirmado que acepte ese campo y no la lleva.
 PRIVACIDAD_OPENROUTER = {"data_collection": "deny"}
 
 

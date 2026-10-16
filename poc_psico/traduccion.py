@@ -74,19 +74,19 @@ def _lectura(datos: dict) -> dict:
 
 def _proteccion(datos: dict) -> dict:
     # Solo se lee el texto anonimizado (marcadores en lugar de los valores originales): el mapa de valores no se usa aquí.
-    # Va solo al navegador de la propia persona; así puede ver qué se enviará a los servicios externos.
+    # Va solo al navegador de la propia persona; así puede ver qué se envió a los servicios externos.
     anonimo = datos.get("texto_anon") or ""
     marcadores = list(dict.fromkeys(_MARCADOR.findall(anonimo)))
     total = len(marcadores)
     if not total:
-        return {"resumen": "No se detectaron datos personales que ocultar (revisa el texto que se enviará)", "lineas": _recortar(anonimo)}
+        return {"resumen": "No se detectaron datos personales que ocultar (revisa el texto que se envió a los servicios externos)", "lineas": _recortar(anonimo)}
     lineas = []
     for tipo, etiqueta in _TIPOS_MARCADOR:
         del_tipo = [m for m in marcadores if m.startswith(f"[{tipo}_")]
         if del_tipo:
             lineas.append(f"{etiqueta}: {len(del_tipo)} ({', '.join(del_tipo)})")
     lineas += _recortar(anonimo)
-    return {"resumen": f"Datos personales ocultados antes del análisis: {total} (la detección automática puede fallar: revisa el texto que se enviará)", "lineas": lineas}
+    return {"resumen": f"Datos personales ocultados antes del análisis: {total} (la detección automática puede fallar: revisa el texto que se envió a los servicios externos)", "lineas": lineas}
 
 
 def _verificacion(datos: dict) -> dict:

@@ -208,7 +208,7 @@ async def _entrada_de(formulario) -> tuple[str, str | None, bytes | None, str]:
         raise ErrorApi("validacion", "Envía el texto del caso o un archivo, no ambos.", 400, "texto y archivo a la vez")
     if tiene_archivo:
         if str(formulario.get("confirma_ocr", "")).strip().lower() != "true":
-            raise ErrorApi("ocr", "Confirma que aceptas que el archivo se lea con un servicio externo (OCR).", 400, "falta confirma_ocr=true")
+            raise ErrorApi("ocr", "Confirma que aceptas que el archivo se lea con servicios externos (OpenRouter, Mistral y OpenAI).", 400, "falta confirma_ocr=true")
         datos = await archivo.read(MAX_BYTES_ARCHIVO + 1)
         extension = await asyncio.to_thread(_validar_archivo, archivo.filename or "", datos)   # pypdf y Pillow son síncronos
         return "archivo", None, datos, extension

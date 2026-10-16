@@ -29,7 +29,7 @@
   "titulo": "Protección de datos personales",
   "estado": "listo",
   "detalle": {
-   "resumen": "Datos personales ocultados antes del análisis: 2 (la detección automática puede fallar: revisa el texto que se enviará)",
+   "resumen": "Datos personales ocultados antes del análisis: 2 (la detección automática puede fallar: revisa el texto que se envió a los servicios externos)",
    "lineas": [
     "Personas: 1 ([PER_1])",
     "Lugares: 1 ([LOC_1])",

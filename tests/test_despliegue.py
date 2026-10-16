@@ -31,12 +31,23 @@ def _coincide(ruta: str, patron: str) -> bool:
 
 
 def _ignorada(ruta: str) -> bool:
-    return any(_coincide(ruta, p) for p in _patrones() if not p.startswith("!"))
+    """Como .gitignore: gana la última regla que coincide y «!» la revierte."""
+    ignorada = False
+    for p in _patrones():
+        if p.startswith("!"):
+            if _coincide(ruta, p[1:]):
+                ignorada = False
+        elif _coincide(ruta, p):
+            ignorada = True
+    return ignorada
 
 
 def test_vercelignore_excluye_lo_que_no_hace_falta_en_ejecucion():
     for ruta in ("tests/test_api.py", "docs/superpowers/plan.md", "scripts/probar_caso.py", ".superpowers/sdd/x.md",
                  "README.md", "DESPLIEGUE.md", "poc_psico/__pycache__/x.pyc", ".pytest_cache/v", "requirements-dev.txt"):
+        assert _ignorada(ruta), ruta
+    assert not _ignorada(".env.example")   # la plantilla sí se queda; los secretos reales, no
+    for ruta in (".env", ".env.local", ".env.production"):
         assert _ignorada(ruta), ruta
 
 
