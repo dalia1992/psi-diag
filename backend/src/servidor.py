@@ -380,6 +380,24 @@ def salud() -> dict:
     }
 
 
+@app.post("/api/acceso")
+async def acceso(request: Request):
+    """Comprueba el código de acceso sin procesar nada ni llamar a ningún servicio: la pantalla de inicio lo usa para avisar
+    de un código incorrecto antes de que se suba un caso. Comparte con /api/caso el límite de uso y el tope de intentos fallidos."""
+    inicio = time.perf_counter()
+    id_solicitud = uuid.uuid4().hex[:8]
+    estado = "ok"
+    try:
+        limitar(ip_de(request))
+        revisar_acceso(request)
+        return responder({"ok": True})
+    except ErrorApi as e:
+        estado = e.codigo
+        return responder(respuesta_error(e, id_solicitud, BACKEND), e.status)
+    finally:
+        registrar(id=id_solicitud, estado=estado, ms=milisegundos(inicio), via="acceso")
+
+
 @app.post("/api/caso")
 async def caso(request: Request):
     inicio = time.perf_counter()

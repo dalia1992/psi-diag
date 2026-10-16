@@ -558,3 +558,48 @@ def test_si_no_se_pueden_armar_los_componentes_el_error_es_reintentable_y_amable
     assert error["error"]["codigo"] == "backend" and error["error"]["reintentable"] is True
     assert error["error"]["mensaje"] == "El servicio de consulta de la CIE-11 no respondió. Puedes intentarlo de nuevo en un momento."
     assert "servidor-interno" not in r.text and "TOKEN-XYZ" not in r.text and "Connection" not in r.text
+
+
+# ----------------------------------------------------------------------------- comprobación del código desde el inicio
+def test_acceso_con_codigo_correcto_responde_ok_sin_llamar_a_nada(cliente, monkeypatch):
+    monkeypatch.setenv("ACCESS_CODE", "secreto")
+    modulo_app._fallos.clear()
+    r = cliente.post("/api/acceso", headers={"x-access-code": "secreto"})
+    assert r.status_code == 200 and r.json() == {"ok": True}
+    assert r.headers["cache-control"] == "no-store"
+
+
+def test_acceso_con_codigo_incorrecto_o_ausente_responde_401(cliente, monkeypatch):
+    monkeypatch.setenv("ACCESS_CODE", "secreto")
+    modulo_app._fallos.clear()
+    for cabeceras in ({"x-access-code": "mal"}, {}):
+        r = cliente.post("/api/acceso", headers=cabeceras)
+        assert r.status_code == 401 and r.json()["error"]["codigo"] == "acceso" and r.json()["ok"] is False
+
+
+def test_acceso_cuenta_los_intentos_fallidos_y_termina_en_429(cliente, monkeypatch):
+    monkeypatch.setenv("ACCESS_CODE", "secreto")
+    monkeypatch.setattr(modulo_app, "MAX_POR_MINUTO", 100)
+    modulo_app._fallos.clear()
+    codigos = [cliente.post("/api/acceso", headers={"x-access-code": f"mal{i}"}).status_code for i in range(7)]
+    assert codigos[:5] == [401] * 5 and codigos[5:] == [429, 429]
+
+
+def test_acceso_sin_codigo_configurado_en_local_responde_ok(cliente):
+    assert cliente.post("/api/acceso").status_code == 200
+
+
+def test_acceso_en_vercel_sin_access_code_responde_sin_configurar(cliente, monkeypatch):
+    monkeypatch.setenv("VERCEL", "1")
+    r = cliente.post("/api/acceso")
+    assert r.status_code == 503 and r.json()["error"]["codigo"] == "sin_configurar"
+
+
+def test_acceso_no_registra_el_codigo_en_el_log(cliente, monkeypatch, caplog):
+    monkeypatch.setenv("ACCESS_CODE", "secreto-muy-largo")
+    modulo_app._fallos.clear()
+    with caplog.at_level(logging.INFO, logger="psico"):
+        cliente.post("/api/acceso", headers={"x-access-code": "intento-secreto"})
+        cliente.post("/api/acceso", headers={"x-access-code": "secreto-muy-largo"})
+    texto = " ".join(r.getMessage() for r in caplog.records)
+    assert "intento-secreto" not in texto and "secreto-muy-largo" not in texto

@@ -129,13 +129,39 @@ async function consultarSalud() {
   $("bloque-codigo").hidden = !estado.requiereCodigo;
 }
 
-function iniciar() {
+// El código se comprueba aquí, antes de pasar a «Nuevo caso»: así un código erróneo se detecta de inmediato y no se sube nada.
+async function comprobarCodigo(codigo) {
+  try {
+    const r = await fetch("/api/acceso", { method: "POST", headers: { "x-access-code": codigo }, cache: "no-store" });
+    if (r.ok) return { ok: true };
+    const error = await errorDeRespuesta(r);
+    return { ok: false, mensaje: error.mensaje };
+  } catch {
+    return { ok: false, mensaje: "No se pudo comprobar el código. Revisa tu conexión e inténtalo de nuevo." };
+  }
+}
+
+async function iniciar() {
   const campo = $("codigo-acceso");
+  const boton = $("boton-iniciar");
+  if (boton.disabled) return;
   if (estado.requiereCodigo) {
     const codigo = campo.value.trim();
     if (!codigo) {
       mostrarMensaje($("mensaje-inicio"), "Escribe el código de acceso para continuar.");
       campo.focus();
+      return;
+    }
+    boton.disabled = true;
+    boton.textContent = "Comprobando…";
+    const resultado = await comprobarCodigo(codigo);
+    boton.disabled = false;
+    boton.textContent = "Iniciar";
+    if (!resultado.ok) {
+      estado.codigo = "";
+      mostrarMensaje($("mensaje-inicio"), resultado.mensaje);
+      campo.focus();
+      campo.select();
       return;
     }
     estado.codigo = codigo;
