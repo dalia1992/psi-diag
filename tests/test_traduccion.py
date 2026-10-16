@@ -81,7 +81,7 @@ def test_ninguna_frase_expone_nombres_tecnicos():
 
 def test_herramienta_desconocida_usa_frase_generica():
     assert frase_herramienta("icd11_herramienta_inexistente") == "Consultando la CIE-11…"
-    assert frase_herramienta("icd11_buscar_sintomas_y_signos") == "Consultando la CIE-11…"
+    assert frase_herramienta("icd11_buscar_sintomas_y_signos") == "Buscando por síntomas y signos en la CIE-11"
     assert frase_herramienta("icd11_buscar_codigo_mms") == "Obteniendo el código CIE-11"
     assert frase_herramienta("icd11_buscar_fundacion") == "Buscando el trastorno en la CIE-11"
     assert frase_herramienta("icd11_obtener_criterios_clinicos") == "Revisando los criterios clínicos"
@@ -97,6 +97,24 @@ def test_proteccion_cuenta_marcadores_sin_valores_originales():
         assert original not in texto
     linea_personas = next(linea for linea in resultado["lineas"] if linea.startswith("Personas"))
     assert "2" in linea_personas
+
+
+def test_lectura_muestra_el_texto_leido():
+    texto = "Paciente con tristeza.\n\nDuerme poco desde hace dos meses."
+    resultado = detalle_legible("lectura", {"texto_ocr": texto})
+    assert resultado["lineas"] == ["Paciente con tristeza.", "Duerme poco desde hace dos meses."]
+    assert "revisa que sea correcto" in resultado["resumen"]
+
+
+def test_lectura_recorta_texto_largo_con_aviso():
+    por_lineas = detalle_legible("lectura", {"texto_ocr": "\n".join(f"Línea {i}" for i in range(100))})
+    assert len(por_lineas["lineas"]) == 41
+    assert por_lineas["lineas"][-1] == "… (texto recortado)"
+
+    por_caracteres = detalle_legible("lectura", {"texto_ocr": "x" * 5000})
+    *cuerpo, aviso = por_caracteres["lineas"]
+    assert sum(len(linea) for linea in cuerpo) <= 4000
+    assert aviso == "… (texto recortado)"
 
 
 def test_verificacion_texto_no_clinico_explica_en_lenguaje_claro():

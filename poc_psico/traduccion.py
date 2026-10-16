@@ -25,8 +25,12 @@ ETIQUETAS_HERRAMIENTAS = {
     "icd11_buscar_fundacion": "Buscando el trastorno en la CIE-11",
     "icd11_buscar_codigo_mms": "Obteniendo el código CIE-11",
     "icd11_obtener_criterios_clinicos": "Revisando los criterios clínicos",
+    "icd11_buscar_sintomas_y_signos": "Buscando por síntomas y signos en la CIE-11",
 }
 FRASE_GENERICA = "Consultando la CIE-11…"
+MAX_LINEAS_LECTURA = 40
+MAX_CARACTERES_LECTURA = 4000
+TEXTO_RECORTADO = "… (texto recortado)"
 
 _MARCADOR = re.compile(r"\[(?:PER|LOC|ORG)_\d+\]")
 _TIPOS_MARCADOR = (("PER", "Personas"), ("LOC", "Lugares"), ("ORG", "Organizaciones"))
@@ -43,11 +47,24 @@ def frase_herramienta(nombre: str) -> str:
 
 
 def _lectura(datos: dict) -> dict:
-    texto = datos.get("texto_ocr") or ""
-    return {
-        "resumen": "Archivo leído",
-        "lineas": [f"Caracteres leídos: {len(texto)}", f"Líneas: {len(texto.splitlines())}"],
-    }
+    """Muestra el texto leído del archivo para que la persona revise el OCR; se recorta si es muy largo."""
+    lineas, total, recortado = [], 0, False
+    for linea in (datos.get("texto_ocr") or "").splitlines():
+        if not linea.strip():
+            continue
+        if len(lineas) == MAX_LINEAS_LECTURA:
+            recortado = True
+            break
+        espacio = MAX_CARACTERES_LECTURA - total
+        if len(linea) > espacio:
+            lineas.append(linea[:espacio])
+            recortado = True
+            break
+        lineas.append(linea)
+        total += len(linea)
+    if recortado:
+        lineas.append(TEXTO_RECORTADO)
+    return {"resumen": "Texto leído del archivo (revisa que sea correcto)", "lineas": lineas}
 
 
 def _proteccion(datos: dict) -> dict:
