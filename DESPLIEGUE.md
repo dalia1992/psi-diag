@@ -67,7 +67,7 @@ Cómo saber que salió bien: arriba del nombre del repositorio aparece una etiqu
 
 Estos pasos **los ejecutan juntas** y no se hace nada de golpe. Primero entiende dónde está el trabajo.
 
-**Aviso importante:** en este repositorio la rama `main` tiene hoy **solo los documentos** (el diseño y el plan). **Toda la aplicación (`app.py`, `public/`, `models/`...) está únicamente en la rama `feature/fase1`.** Si subieras `main` tal cual, GitHub y Vercel recibirían un proyecto sin aplicación.
+**Aviso importante:** en este repositorio la rama `main` tiene hoy **solo los documentos** (el diseño y el plan). **Toda la aplicación (`app.py`, `backend/`, `public/`...) está únicamente en la rama `feature/fase1`.** Si subieras `main` tal cual, GitHub y Vercel recibirían un proyecto sin aplicación.
 
 Qué rama quieres usar es **decisión tuya**, con tu asistente al lado. Tu asistente no debe unir ramas ni subir nada sin que tú le digas «sí» de forma explícita.
 
@@ -143,9 +143,9 @@ No debe imprimir **nada** (`.env.example` no cuenta, no coincide). Si imprime al
 
 Si GitHub pide usuario y contraseña, en lugar de contraseña usa un token personal o el inicio de sesión que te sugiera (GitHub ya no acepta la contraseña normal). Nunca pegues ese token en un chat.
 
-Sobre el tamaño: GitHub rechaza archivos de más de 100 MB. El modelo de anonimización (`models/ner/`) está guardado **en dos partes de ~55 MB cada una** (`model_int8.onnx.part1` y `.part2`), por eso GitHub las acepta. La app las junta en memoria al arrancar. No intentes «arreglarlo» juntándolas.
+Sobre el tamaño: GitHub rechaza archivos de más de 100 MB. El modelo de anonimización (`backend/models/ner/`) está guardado **en dos partes de ~55 MB cada una** (`model_int8.onnx.part1` y `.part2`), por eso GitHub las acepta. La app las junta en memoria al arrancar. No intentes «arreglarlo» juntándolas.
 
-Cómo saber que funcionó: recarga la página del repositorio en GitHub (en la rama que subiste); ves las carpetas (`public`, `models`, `poc_psico`...) y el archivo `app.py`. Comprueba que **no** hay ningún `.env` y que sigue diciendo «Private».
+Cómo saber que funcionó: recarga la página del repositorio en GitHub (en la rama que subiste); ves las carpetas (`backend`, `public`, `docs`...) y el archivo `app.py`. Comprueba que **no** hay ningún `.env` y que sigue diciendo «Private».
 
 Si falla: `remote origin already exists` → `git remote -v` para ver a dónde apunta y avisa; `file exceeds 100 MB` → avisa (algún archivo grande se coló); error de permisos → revisa que iniciaste sesión en la cuenta correcta.
 
@@ -157,7 +157,7 @@ Si falla: `remote origin already exists` → `git remote -v` para ver a dónde a
 4. En la pantalla de configuración revisa:
    - **Framework Preset:** deja el que Vercel detecte. Para este proyecto lo esperable es «Other» o que detecte Python/FastAPI por sí solo. Si te ofrece algo muy distinto (Next.js, por ejemplo), cámbialo a «Other».
    - **Root Directory:** la raíz del repositorio (donde está `app.py`).
-   - **Build Command / Output Directory:** déjalos vacíos o como vengan; el proyecto no compila nada.
+   - **Build Command / Output Directory:** déjalos vacíos o como vengan; el proyecto no compila nada. La carpeta `public/` es la raíz web: Vercel la sirve sola desde su CDN, sin configurar nada. Si al terminar la página no aparece, ve a «La página no aparece / 404 en la raíz» en la sección 14.
 5. Todavía **no agregues variables secretas** (la única excepción es la opcional de abajo). Despliega (botón «Deploy»).
 
 Para ver el tamaño de la función en el registro de construcción, antes de pulsar Deploy (o después, y luego haz un nuevo despliegue) puedes añadir **una variable de entorno de construcción** `VERCEL_ANALYZE_BUILD_OUTPUT` con valor `1`. Es la única variable que puedes agregar ahora: es opcional, solo sirve para mirar tamaños y no es secreta. Cuando ya hayas visto el tamaño, quítala (no hace falta dejarla).
@@ -240,7 +240,7 @@ chmod 600 ~/.config/mvp_psico/env_vercel
    Ejecuta (cambia la dirección):
 
 ```bash
-~/.venvs/mvp_psico/bin/python scripts/probar_caso.py https://TU-PROYECTO.vercel.app --env-file ~/.config/mvp_psico/env_vercel --texto "Mujer de 34 años, ficticia, con tristeza casi diaria desde hace tres meses, poco interés, mal sueño y cansancio."
+~/.venvs/mvp_psico/bin/python backend/scripts/probar_caso.py https://TU-PROYECTO.vercel.app --env-file ~/.config/mvp_psico/env_vercel --texto "Mujer de 34 años, ficticia, con tristeza casi diaria desde hace tres meses, poco interés, mal sueño y cansancio."
 ```
 
    Imprime un renglón por paso y termina con un resumen; el código de salida 0 significa que todo llegó a `ok`. El script nunca imprime el código.
@@ -248,6 +248,8 @@ chmod 600 ~/.config/mvp_psico/env_vercel
 ## 9. Qué revisar en Vercel (la parte técnica)
 
 **Duración de 300 s aceptada en Hobby.** El archivo `vercel.json` pide `maxDuration: 300`. Si el plan no lo permitiera, el registro de construcción lo diría con un mensaje sobre `maxDuration`. Que el despliegue quede «Ready» sin ese error es una buena señal, pero no una prueba. Confírmalo en Vercel: abre el proyecto → «Settings» → «Functions» (y busca también «Fluid Compute»; los nombres pueden variar) y comprueba que la duración máxima permitida sea de 300 s y que Fluid Compute esté activado. **Si ves un máximo menor (por ejemplo 60 s o 100 s), detente y avisa a tu asistente: no cambies código ni configuración por tu cuenta.** Después confirma con un caso largo: no debe cortarse antes de ~280 s por culpa de la plataforma.
+
+**Qué se sube a la función.** El archivo `.vercelignore` deja fuera lo que no se usa en ejecución (`backend/tests/`, `backend/scripts/`, `docs/`, `.superpowers/`, los `.md`, `backend/requirements-dev.txt`, cachés y cualquier `.env`; `.env.example` se queda, es solo una plantilla). Debe seguir incluyendo `app.py`, `backend/src/`, `backend/models/`, `backend/assets/`, `public/`, `vercel.json`, `requirements.txt` y `.python-version`; la prueba `backend/tests/test_despliegue.py` lo comprueba. La estructura es: `app.py` (entrada que Vercel busca en la raíz, solo apunta a `backend/src/servidor.py`), `backend/` (código, modelo `backend/models/ner/`, fuentes del PDF `backend/assets/fonts/`, pruebas, scripts) y `public/` (la pantalla web, con sus fuentes en `public/fonts/`; es la carpeta estática que Vercel sirve por su cuenta).
 
 **Tamaño de la función.** Estimación local (paquetes de Python ≈ 229 MB + modelo ≈ 106 MB + fuentes y código ≈ 1 MB) da unos **335 MB**, bajo el límite de 500 MB descomprimidos que Vercel pone a las funciones de Python (según lo que sabíamos al preparar esta guía; confírmalo en la consola de Vercel). Para verlo real: activa `VERCEL_ANALYZE_BUILD_OUTPUT=1` (paso 5) y busca en el registro de construcción la tabla de tamaños de la función. Si te acercas a los 500 MB, avisa: hay que quitar dependencias.
 
@@ -328,5 +330,7 @@ El orden importa: **primero revocar, después crear otra**.
 | `ocr` | Falta confirmar la lectura del archivo | No se marcó la casilla «Entiendo y quiero subir el archivo» | Marca la casilla de confirmación y reintenta. |
 | `validacion` | La solicitud no es válida | Texto de menos de 20 o más de 8000 caracteres, o reporte de exportación inválido o demasiado grande | Ajusta el texto. |
 | `corte` (desde la pantalla) | La conexión se cortó antes del final | Se cerró la pestaña, falló la red o la plataforma cortó el flujo | Pulsa «Reintentar»; si pasa de nuevo, revisa «Logs». |
+
+**La página no aparece / 404 en la raíz.** El despliegue dice «Ready» y `/api/health` responde, pero `https://TU-PROYECTO.vercel.app/` da 404. La pantalla web está en `public/` (la carpeta estática que Vercel sirve sola); comprueba que existe `public/index.html` en la rama que desplegaste. Si existe y sigue el 404, **detente y avisa a tu asistente; no cambies ajustes por tu cuenta.**
 
 Si nada de esto explica el problema: copia al asistente el `id` de la solicitud y la línea del registro (no contiene datos del caso), y el código de error que mostró la pantalla.

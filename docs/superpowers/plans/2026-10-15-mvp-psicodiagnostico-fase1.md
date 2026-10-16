@@ -1,3 +1,5 @@
+> **Nota (Task 12):** las rutas de este plan se reorganizaron después: `poc_psico` es ahora `backend/src/psi_diag`, `app.py` es `backend/src/servidor.py` (más un `app.py` mínimo en la raíz), y `models/`, `assets/`, `tests/`, `scripts/` viven bajo `backend/`.
+
 # MVP del asistente de psicodiagnóstico · Plan de implementación (fase 1)
 
 > **Para quien ejecute:** REQUIRED SUB-SKILL: usar superpowers:subagent-driven-development (recomendado) o superpowers:executing-plans. Los pasos usan casillas `- [ ]`.
