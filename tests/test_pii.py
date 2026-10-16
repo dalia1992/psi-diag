@@ -2,6 +2,8 @@ from poc_psico.pii import (
     MapaPII,
     anonimizar,
     aplicar_entidades,
+    extender_a_palabra,
+    fusionar_entidades,
     ocultar_cedulas,
     ocultar_correos,
     ocultar_fechas,
@@ -108,3 +110,39 @@ def test_anonimizar_completo_conserva_edad_y_sexo():
     salida = anonimizar(t, ner, mapa)
     assert salida == "[PER_1], mujer de 34 años, vive en [LOC_1]. Tel [TEL]."
     assert "Laura" not in salida and "Guadalajara" not in salida
+
+
+def test_fusiona_fragmentos_contiguos():
+    t = "Cochabamba"
+    ents = [{"entity_group": "LOC", "start": 0, "end": 2}, {"entity_group": "LOC", "start": 2, "end": 10}]
+    assert aplicar_entidades(t, ents, MapaPII()) == "[LOC_1]"
+    assert fusionar_entidades(ents) == [{"entity_group": "LOC", "start": 0, "end": 10}]
+
+
+def test_extiende_a_la_palabra():
+    t = "Paciente LUCIA HERNANDEZ, 29"
+    ents = [ent(t, "CIA HERNANDEZ", "PER")]
+    assert aplicar_entidades(t, ents, MapaPII()) == "Paciente [PER_1], 29"
+
+
+def test_fusiona_fragmento_de_palabra_con_el_resto_del_nombre():
+    t = "Paciente LUCIA HERNANDEZ, 29"
+    ents = [ent(t, "LU", "PER"), ent(t, "CIA HERNANDEZ", "PER")]
+    assert aplicar_entidades(t, ents, MapaPII()) == "Paciente [PER_1], 29"
+
+
+def test_no_funde_tipos_distintos():
+    ents = [{"entity_group": "PER", "start": 0, "end": 3}, {"entity_group": "LOC", "start": 3, "end": 8}]
+    assert len(fusionar_entidades(ents)) == 2
+
+
+def test_conserva_comportamiento_previo():
+    t = "Ana y Luis viven en Lima."
+    ents = [ent(t, "Ana", "PER"), ent(t, "Luis", "PER"), ent(t, "Lima", "LOC")]
+    assert aplicar_entidades(t, ents, MapaPII()) == "[PER_1] y [PER_2] viven en [LOC_1]."
+
+
+def test_extender_a_palabra_con_acentos_y_enie():
+    t = "Señora Muñoz-Ávila"
+    assert extender_a_palabra(t, 9, 11) == (7, 12)
+    assert extender_a_palabra("ab cd", 1, 4) == (0, 5)

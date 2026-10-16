@@ -47,9 +47,36 @@ class MapaPII:
         return _PATRON_PLACEHOLDER.sub(_sustituir, texto), desconocidos
 
 
+def extender_a_palabra(texto: str, ini: int, fin: int) -> tuple[int, int]:
+    """Amplía [ini, fin) hasta los límites de palabra (letras y dígitos, con acentos y ñ)."""
+    while ini > 0 and texto[ini - 1].isalnum():
+        ini -= 1
+    while fin < len(texto) and texto[fin].isalnum():
+        fin += 1
+    return ini, fin
+
+
+def fusionar_entidades(entidades: list) -> list:
+    """Une entidades del mismo tipo cuyo rango se toca o solapa (el NER a veces parte un nombre)."""
+    por_tipo = {}
+    for e in entidades:
+        tipo = e.get("entity_group") or e.get("entity", "")
+        por_tipo.setdefault(tipo, []).append((int(e["start"]), int(e["end"])))
+    fusionadas = []
+    for tipo, rangos in por_tipo.items():
+        actual = None
+        for ini, fin in sorted(rangos):
+            if actual and ini <= actual["end"]:
+                actual["end"] = max(actual["end"], fin)
+            else:
+                actual = {"entity_group": tipo, "start": ini, "end": fin}
+                fusionadas.append(actual)
+    return sorted(fusionadas, key=lambda e: (e["start"], e["end"]))
+
+
 def aplicar_entidades(texto: str, entidades: list, mapa: MapaPII) -> str:
     """Sustituye las entidades PER/LOC/ORG por placeholders, de atrás hacia adelante."""
-    candidatas = []
+    pulidas = []
     for e in entidades:
         tipo = e.get("entity_group") or e.get("entity", "")
         if tipo not in TIPOS:
@@ -59,7 +86,9 @@ def aplicar_entidades(texto: str, entidades: list, mapa: MapaPII) -> str:
         ini += len(segmento) - len(segmento.lstrip())
         fin -= len(segmento) - len(segmento.rstrip())
         if fin > ini:
-            candidatas.append((ini, fin, tipo))
+            ini, fin = extender_a_palabra(texto, ini, fin)
+            pulidas.append({"entity_group": tipo, "start": ini, "end": fin})
+    candidatas = [(e["start"], e["end"], e["entity_group"]) for e in fusionar_entidades(pulidas)]
     candidatas.sort()
 
     sin_solape, ultimo_fin = [], -1
