@@ -6,7 +6,7 @@ Regla de oro: **las claves y el código de acceso nunca se pegan en un chat, en 
 
 ## 0. Qué vas a tener al final
 
-- Un repositorio **privado** en GitHub con este proyecto.
+- Un repositorio en GitHub con este proyecto: **privado** si es solo tuyo, o **público** si lo va a revisar alguien del curso. En un repositorio público la regla es todavía más estricta: nunca subas un `.env`, claves ni el código de acceso (el historial de este proyecto se revisó y no los tiene).
 - Un proyecto en Vercel (plan Hobby, gratis, sin tarjeta) con una dirección tipo `https://tu-proyecto.vercel.app`.
 - Dos variables secretas: la clave de OpenRouter y un código de acceso que tú inventas.
 
@@ -53,25 +53,23 @@ git ls-files | grep -i "\.env"
 
 Lo único que debe salir es `.env.example` (es una plantilla vacía, sin claves). Si sale otro `.env`, detente y avisa.
 
-## 3. Crear el repositorio vacío y **privado** en GitHub
+## 3. Crear el repositorio vacío en GitHub
 
 1. En github.com busca el botón para crear un repositorio nuevo (suele ser un «+» arriba a la derecha → «New repository»; los nombres pueden variar).
-2. Ponle un nombre (por ejemplo `mvp-psicodiagnostico`).
-3. Marca **Private**. Esto es importante.
+2. Ponle un nombre (por ejemplo `psi-diag`).
+3. Elige la visibilidad: **Private** si es solo tuyo, o **Public** si es para que lo revise un profe. Si es público, ten presente que cualquiera puede leer el código (los secretos no están en él: viven solo en Vercel).
 4. **No** marques «Add a README», «.gitignore» ni licencia: debe quedar vacío.
-5. Crea el repositorio. GitHub muestra una dirección como `https://github.com/TU-USUARIO/mvp-psicodiagnostico.git`.
+5. Crea el repositorio. GitHub muestra una dirección como `https://github.com/TU-USUARIO/psi-diag.git`.
 
-Cómo saber que salió bien: arriba del nombre del repositorio aparece una etiqueta «Private».
+Cómo saber que salió bien: arriba del nombre del repositorio aparece la etiqueta «Private» o «Public», según elegiste.
 
 ## 4. Subir el proyecto
 
 Estos pasos **los ejecutan juntas** y no se hace nada de golpe. Primero entiende dónde está el trabajo.
 
-**Aviso importante:** en este repositorio la rama `main` tiene hoy **solo los documentos** (el diseño y el plan). **Toda la aplicación (`app.py`, `backend/`, `public/`...) está únicamente en la rama `feature/fase1`.** Si subieras `main` tal cual, GitHub y Vercel recibirían un proyecto sin aplicación.
+**Estado actual:** la rama `main` ya contiene toda la aplicación (`app.py`, `backend/`, `public/`...). La rama `feature/fase1` es solo una copia local del mismo commit y no hace falta subirla. Vercel desplegará `main`, que es su rama de producción por defecto.
 
-Qué rama quieres usar es **decisión tuya**, con tu asistente al lado. Tu asistente no debe unir ramas ni subir nada sin que tú le digas «sí» de forma explícita.
-
-Comprueba en qué rama estás:
+Comprueba en qué rama estás (debe decir `main`):
 
 ```bash
 git branch --show-current
@@ -80,40 +78,14 @@ git branch --show-current
 Conecta el repositorio de GitHub (cambia la dirección por la tuya):
 
 ```bash
-git remote add origin https://github.com/TU-USUARIO/mvp-psicodiagnostico.git
+git remote add origin https://github.com/TU-USUARIO/psi-diag.git
 ```
 
-Elige **una** de las dos rutas.
-
-**Ruta A: llevar la aplicación a `main` y subir `main`** (la más ordenada: Vercel despliega `main` sin tocar nada).
-
-```bash
-git checkout main
-```
-
-```bash
-git merge feature/fase1
-```
-
-```bash
-git log --oneline -3
-```
-
-Deberías ver arriba los commits de la aplicación. Antes de subir, haz las comprobaciones de abajo. Después:
+**Haz primero las comprobaciones de abajo** («Comprobaciones antes de cualquier `git push`») y solo cuando todas salgan bien ejecuta:
 
 ```bash
 git push -u origin main
 ```
-
-**Ruta B: subir `feature/fase1` y decirle a Vercel que despliegue esa rama.**
-
-Estás en `feature/fase1`. **Haz primero las comprobaciones de abajo** («Comprobaciones antes de cualquier `git push`») y solo cuando todas salgan bien ejecuta:
-
-```bash
-git push -u origin feature/fase1
-```
-
-Después, en Vercel, al importar el proyecto (paso 5) o luego en «Settings» → «Git», busca «Production Branch» (los nombres pueden variar) y escribe `feature/fase1`.
 
 **Comprobaciones antes de cualquier `git push`** (en la rama que vas a subir):
 
@@ -145,7 +117,7 @@ Si GitHub pide usuario y contraseña, en lugar de contraseña usa un token perso
 
 Sobre el tamaño: GitHub rechaza archivos de más de 100 MB. El modelo de anonimización (`backend/models/ner/`) está guardado **en dos partes de ~55 MB cada una** (`model_int8.onnx.part1` y `.part2`), por eso GitHub las acepta. La app las junta en memoria al arrancar. No intentes «arreglarlo» juntándolas.
 
-Cómo saber que funcionó: recarga la página del repositorio en GitHub (en la rama que subiste); ves las carpetas (`backend`, `public`, `docs`...) y el archivo `app.py`. Comprueba que **no** hay ningún `.env` y que sigue diciendo «Private».
+Cómo saber que funcionó: recarga la página del repositorio en GitHub (en la rama que subiste); ves las carpetas (`backend`, `public`, `docs`...) y el archivo `app.py`. Comprueba que **no** hay ningún `.env` y que la etiqueta de visibilidad («Private» o «Public») es la que elegiste.
 
 Si falla: `remote origin already exists` → `git remote -v` para ver a dónde apunta y avisa; `file exceeds 100 MB` → avisa (algún archivo grande se coló); error de permisos → revisa que iniciaste sesión en la cuenta correcta.
 
