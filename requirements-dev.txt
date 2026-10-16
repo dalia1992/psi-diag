@@ -1,7 +1,0 @@
--r requirements.txt
-pytest==9.1.1
-pytest-asyncio==1.4.0
-httpx==0.28.1
-uvicorn==0.54.0
-fonttools==4.67.0
-brotli==1.2.0

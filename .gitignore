@@ -5,4 +5,4 @@ __pycache__/
 .superpowers/
 .DS_Store
 .vercel/
-models/ner/model_int8.onnx
+backend/models/ner/model_int8.onnx

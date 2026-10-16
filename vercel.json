@@ -1,6 +1,6 @@
 {
   "functions": {
-    "app.py": { "maxDuration": 300, "includeFiles": "{models,assets}/**" }
+    "app.py": { "maxDuration": 300, "includeFiles": "backend/{models,assets}/**" }
   },
   "headers": [
     {
