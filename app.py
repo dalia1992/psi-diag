@@ -23,6 +23,7 @@ from typing import Any, AsyncIterator
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, StreamingResponse
+from starlette.background import BackgroundTask
 
 from errores_api import ErrorApi, cuerpo_error, limpiar_texto, respuesta_error
 
@@ -87,14 +88,35 @@ def modo_demo() -> bool:
 
 
 # ----------------------------------------------------------------------------- 1. código de acceso
+MAX_FALLOS_ACCESO = 5
+_fallos: dict[str, deque] = defaultdict(deque)   # intentos fallidos de código por visitante, última hora de 60 s
+
+
+def _fallos_recientes(visitante: str) -> deque:
+    ahora = time.monotonic()
+    marcas = _fallos[visitante]
+    while marcas and ahora - marcas[0] > 60:
+        marcas.popleft()
+    if len(_fallos) > 2000:
+        for clave in [k for k, v in _fallos.items() if not v or ahora - v[-1] > 60]:
+            del _fallos[clave]
+    return marcas
+
+
 def revisar_acceso(request: Request) -> None:
     esperado = os.getenv("ACCESS_CODE", "").strip()
     if not esperado:
         if en_vercel():  # en producción nunca queda abierto por olvido
             raise ErrorApi("sin_configurar", "Falta la variable de entorno ACCESS_CODE en Vercel.", 503, "define ACCESS_CODE y vuelve a desplegar")
         return
+    visitante = ip_de(request)
+    fallos = _fallos_recientes(visitante)
+    if len(fallos) >= MAX_FALLOS_ACCESO:  # frena la fuerza bruta del código compartido
+        raise ErrorApi("limite", "Demasiados intentos con un código incorrecto. Espera un momento.", 429,
+                       f"máximo {MAX_FALLOS_ACCESO} intentos fallidos por minuto", True)
     recibido = request.headers.get("x-access-code", "").strip()
     if not hmac.compare_digest(recibido.encode(), esperado.encode()):
+        fallos.append(time.monotonic())
         raise ErrorApi("acceso", "El código de acceso no es correcto.", 401, "falta o no coincide x-access-code")
 
 
@@ -157,6 +179,13 @@ async def leer_entrada(request: Request) -> tuple[str, str | None, bytes | None,
         formulario = await request.form(max_files=1, max_fields=10)
     except Exception:  # noqa: BLE001
         raise ErrorApi("validacion", "La solicitud no es válida.", 400, "no es multipart/form-data") from None
+    try:
+        return await _entrada_de(formulario)
+    finally:
+        await formulario.close()   # libera ya el archivo subido (datos personales), sin esperar al recolector
+
+
+async def _entrada_de(formulario) -> tuple[str, str | None, bytes | None, str]:
     texto = formulario.get("texto")
     archivo = formulario.get("archivo")
     tiene_texto = isinstance(texto, str) and texto.strip() != ""
@@ -209,12 +238,13 @@ def _soltar_archivo(ruta: Path | None, activo: threading.Event, fin: threading.E
         borrar()
 
 
-async def transmitir(entrada: str, ruta: Path | None, id_solicitud: str, via: str) -> AsyncIterator[str]:
+async def transmitir(entrada: str, ruta: Path | None, id_solicitud: str, via: str,
+                     activo: threading.Event | None = None, fin: threading.Event | None = None) -> AsyncIterator[str]:
     """Genera el stream SSE. El archivo temporal (`ruta`) se borra siempre, incluso si el cliente se desconecta."""
     from poc_psico.grafo import ejecutar_eventos
 
     inicio = time.perf_counter()
-    activo, fin = threading.Event(), threading.Event()
+    activo, fin = activo or threading.Event(), fin or threading.Event()
     estado = "error"
     siguiente: asyncio.Future | None = None
     flujo = None
@@ -310,8 +340,8 @@ async def caso(request: Request):
     via = "desconocida"
     ruta: Path | None = None
     try:
+        limitar(ip_de(request))   # primero el límite: así también cuentan los intentos con código incorrecto
         revisar_acceso(request)
-        limitar(ip_de(request))
         via, texto, datos, extension = await leer_entrada(request)
         cabeceras = {"Cache-Control": "no-store", "X-Accel-Buffering": "no", "X-Content-Type-Options": "nosniff"}
         if modo_demo():
@@ -327,7 +357,12 @@ async def caso(request: Request):
             entrada = str(ruta)
         else:
             entrada = texto
-        return StreamingResponse(transmitir(entrada, ruta, id_solicitud, via), media_type="text/event-stream", headers=cabeceras)
+        activo, fin = threading.Event(), threading.Event()
+        # Respaldo: si el cliente se va antes de que el generador arranque, su `finally` no corre; esto borra el archivo
+        # (idempotente, y respeta al hilo del OCR si sigue leyendo).
+        respaldo = BackgroundTask(_soltar_archivo, ruta, activo, fin)
+        return StreamingResponse(transmitir(entrada, ruta, id_solicitud, via, activo, fin), media_type="text/event-stream",
+                                 headers=cabeceras, background=respaldo)
     except ErrorApi as e:
         if ruta is not None:
             ruta.unlink(missing_ok=True)

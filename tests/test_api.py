@@ -262,15 +262,103 @@ def test_tiempo_agotado_emite_error_reintentable(monkeypatch):
     assert set(ultimo["error"]) == {"codigo", "mensaje", "detalle", "reintentable"}
 
 
-def test_falla_inesperada_emite_error_backend_sin_detalle_del_texto(monkeypatch):
-    def ner_roto(texto):
-        raise RuntimeError("fallo con Laura Mendoza")
+def test_falla_inesperada_no_filtra_el_texto_ni_el_mensaje_de_la_excepcion(monkeypatch):
+    registros = []
 
-    componentes, _ = construir(ner=ner_roto)
+    class Captura(logging.Handler):
+        def emit(self, record):
+            registros.append(record.getMessage())
+
+    secreto = "fallo con Laura Mendoza en Guadalajara"
+
+    def ner_roto(texto):
+        raise RuntimeError(secreto)
+
+    async def agente_roto(sintomas):
+        raise RuntimeError(secreto)
+
+    for componentes, _ in (construir(ner=ner_roto), construir(busqueda_cie11=agente_roto)):
+        monkeypatch.setattr(modulo_app, "componentes_de_prueba", componentes)
+        modulo_app._visitas.clear()
+        manejador = Captura()
+        log = logging.getLogger("psico")
+        log.addHandler(manejador)
+        try:
+            r = TestClient(modulo_app.app).post("/api/caso", data={"texto": ENTRADA})
+        finally:
+            log.removeHandler(manejador)
+        eventos = eventos_de(r)
+        assert eventos[-1]["tipo"] in ("resultado", "error")
+        assert registros
+        todo_log = "\n".join(registros)
+        assert "Laura" not in todo_log and "Mendoza" not in todo_log and "fallo con" not in todo_log
+        for e in eventos:
+            visibles = []
+            if e["tipo"] == "resultado":
+                visibles = [e["resultado"]["razon_amigable"]]
+            elif e["tipo"] == "error":
+                visibles = [e["error"]["mensaje"], e["error"]["detalle"]]
+            for v in visibles:
+                assert "Laura" not in v and "Mendoza" not in v and "fallo con" not in v
+        registros.clear()
+
+
+def test_intentos_con_codigo_incorrecto_terminan_en_429(cliente, monkeypatch):
+    monkeypatch.setenv("ACCESS_CODE", "secreto")
+    monkeypatch.setattr(modulo_app, "MAX_POR_MINUTO", 100)
+    modulo_app._fallos.clear()
+    codigos = [cliente.post("/api/caso", data={"texto": ENTRADA}, headers={"x-access-code": f"mal{i}"}).status_code for i in range(7)]
+    assert codigos[:5] == [401] * 5 and codigos[5:] == [429, 429]
+
+
+def test_codigo_correcto_antes_del_umbral_sigue_funcionando(cliente, monkeypatch):
+    monkeypatch.setenv("ACCESS_CODE", "secreto")
+    modulo_app._fallos.clear()
+    for i in range(4):
+        assert cliente.post("/api/caso", data={"texto": ENTRADA}, headers={"x-access-code": "mal"}).status_code == 401
+    assert cliente.post("/api/caso", data={"texto": ENTRADA}, headers={"x-access-code": "secreto"}).status_code == 200
+
+
+def test_los_intentos_incorrectos_cuentan_para_el_limite_general(cliente, monkeypatch):
+    monkeypatch.setenv("ACCESS_CODE", "secreto")
+    monkeypatch.setattr(modulo_app, "MAX_POR_MINUTO", 2)
+    modulo_app._fallos.clear()
+    codigos = [cliente.post("/api/caso", data={"texto": ENTRADA}, headers={"x-access-code": "mal"}).status_code for _ in range(3)]
+    assert codigos == [401, 401, 429]
+
+
+def test_respaldo_borra_el_archivo_si_el_generador_nunca_arranca(cliente, monkeypatch):
+    rutas = []
+
+    async def generador_muerto(entrada, ruta, id_solicitud, via, activo=None, fin=None):
+        rutas.append(ruta)
+        assert ruta.exists()
+        return
+        yield  # pragma: no cover  (generador vacío que no borra nada)
+
+    monkeypatch.setattr(modulo_app, "transmitir", generador_muerto)
+    r = cliente.post("/api/caso", data={"confirma_ocr": "true"}, files={"archivo": ("caso.png", png_valido(), "image/png")})
+    assert r.status_code == 200 and len(rutas) == 1
+    assert not rutas[0].exists()
+
+
+async def test_formulario_se_cierra_en_toda_ruta(monkeypatch):
+    from starlette.datastructures import FormData
+    cerrados = []
+    original = FormData.close
+
+    async def cerrar(self):
+        cerrados.append(1)
+        await original(self)
+
+    monkeypatch.setattr(FormData, "close", cerrar)
+    componentes, _ = construir()
     monkeypatch.setattr(modulo_app, "componentes_de_prueba", componentes)
-    r = TestClient(modulo_app.app).post("/api/caso", data={"texto": ENTRADA})
-    # ejecutar_eventos convierte la falla en un resultado de error; el stream sigue siendo válido
-    assert eventos_de(r)[-1]["tipo"] in ("resultado", "error")
+    c = TestClient(modulo_app.app)
+    c.post("/api/caso", data={"texto": ENTRADA})
+    c.post("/api/caso", data={"texto": "corto"})
+    c.post("/api/caso", files={"archivo": ("caso.png", png_valido(), "image/png")})
+    assert len(cerrados) == 3
 
 
 # ----------------------------------------------------------------------------- modo demo
