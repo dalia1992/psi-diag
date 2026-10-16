@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 
 from .errores import FlujoDetenido
 from .guardrail import MODELO_DECISIONS
-from .peticiones import URL_OPENROUTER, payload_decisions, post_decisions, post_openrouter
+from .peticiones import PRIVACIDAD_OPENROUTER, URL_OPENROUTER, payload_decisions, post_decisions, post_openrouter
 from .prompts import DATOS_NO_INSTRUCCIONES
 from .reintentos import con_reintentos_503, estructurar, invocar_estructurado
 
@@ -236,6 +236,7 @@ def _buscar(tipo, temas, *, api_key, post, url, modelo, timeout, esperar) -> lis
         "temperature": 0,
         "messages": [{"role": "user", "content": enunciado.format(temas=temas) + pie}],
         "plugins": [{"id": "web", "engine": MOTOR, "include_domains": [dominio], "max_results": max_resultados}],
+        "provider": dict(PRIVACIDAD_OPENROUTER),
     }
 
     def llamar():

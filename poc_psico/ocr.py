@@ -13,7 +13,7 @@ from pypdf import PdfReader
 from pypdf.errors import PyPdfError
 
 from .errores import FlujoDetenido
-from .peticiones import URL_OPENROUTER, post_openrouter
+from .peticiones import PRIVACIDAD_OPENROUTER, URL_OPENROUTER, post_openrouter
 from .reintentos import con_reintentos_503
 
 EXTENSIONES_IMAGEN = {".jpg", ".jpeg", ".png"}
@@ -135,6 +135,7 @@ def leer_archivo_mistral(
             {"type": "file", "file": {"filename": "vineta.pdf", "file_data": "data:application/pdf;base64," + pdf}},
         ]}],
         "plugins": [{"id": "file-parser", "pdf": {"engine": "mistral-ocr"}}],
+        "provider": dict(PRIVACIDAD_OPENROUTER),
     }
 
     def llamar():

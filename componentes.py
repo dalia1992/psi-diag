@@ -25,13 +25,30 @@ def cabeceras_openrouter() -> dict:
     return cabeceras
 
 
+def crear_llm(clave: str):
+    """Modelo de chat vía OpenRouter, con la preferencia de privacidad (`provider.data_collection = deny`)."""
+    from langchain_openai import ChatOpenAI
+
+    from poc_psico.peticiones import PRIVACIDAD_OPENROUTER
+
+    return ChatOpenAI(
+        model=os.getenv("MODEL_ID", "anthropic/claude-haiku-5.5"),
+        api_key=clave,
+        base_url="https://openrouter.ai/api/v1",
+        temperature=0,
+        max_tokens=4096,
+        timeout=120,
+        max_retries=3,
+        default_headers=cabeceras_openrouter(),
+        extra_body={"provider": dict(PRIVACIDAD_OPENROUTER)},
+    )
+
+
 def _clave() -> str:
     return os.getenv("OPENROUTER_API_KEY", "").strip()
 
 
 async def _construir():
-    from langchain_openai import ChatOpenAI
-
     from poc_psico.agente import PROMPT_AGENTE, TOOLS_BASE, cargar_tools, construir_agente, correr_agente
     from poc_psico.grafo import Componentes
     from poc_psico.guardrail import consultar_decisions
@@ -41,16 +58,7 @@ async def _construir():
     from poc_psico.ocr import leer_archivo_mistral
 
     clave = _clave()
-    llm = ChatOpenAI(
-        model=os.getenv("MODEL_ID", "anthropic/claude-haiku-5.5"),
-        api_key=clave,
-        base_url="https://openrouter.ai/api/v1",
-        temperature=0,
-        max_tokens=4096,
-        timeout=120,
-        max_retries=3,
-        default_headers=cabeceras_openrouter(),
-    )
+    llm = crear_llm(clave)
     url_mcp = os.getenv("AGENT_MCP_URL", AGENT_MCP_URL_PREDETERMINADA)
     tools = await cargar_tools(url_mcp, TOOLS_BASE)
     agente = construir_agente(llm, tools, PROMPT_AGENTE, MAX_RONDAS)

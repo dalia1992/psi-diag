@@ -165,6 +165,7 @@ def test_las_busquedas_restringen_el_dominio_y_ninguna_lleva_codigos_ni_datos_de
         assert plugin["id"] == "web" and plugin["engine"] == "exa" and "exclude_domains" not in plugin
         assert "6A70" not in str(llamada["json"]["messages"]) and "tristeza" not in str(llamada["json"]["messages"])
         assert llamada["json"]["max_tokens"] >= 2000
+        assert llamada["json"]["provider"] == {"data_collection": "deny"}
         assert llamada["headers"]["Authorization"] == "Bearer clave"
     assert "Trastorno depresivo" in str(post.llamadas[0]["json"]["messages"])
 

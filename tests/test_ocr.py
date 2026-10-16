@@ -51,6 +51,7 @@ def test_mistral_envia_la_foto_como_pdf_con_el_plugin_y_devuelve_el_texto_sin_la
     assert visto["headers"]["Authorization"] == "Bearer clave-falsa"
     assert visto["json"]["plugins"] == [{"id": "file-parser", "pdf": {"engine": "mistral-ocr"}}]
     assert visto["json"]["max_tokens"] <= 16
+    assert visto["json"]["provider"] == {"data_collection": "deny"}   # que no se guarde ni se entrene con el archivo
     parte = visto["json"]["messages"][0]["content"][1]["file"]
     assert parte["file_data"].startswith("data:application/pdf;base64,")
     assert base64.b64decode(parte["file_data"].split(",", 1)[1]).startswith(b"%PDF")
