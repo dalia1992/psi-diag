@@ -59,12 +59,17 @@ def crear_ner_onnx(directorio: Path) -> Callable[[str], list]:
     directorio = Path(directorio)
     sesion = ort.InferenceSession(_leer_modelo(directorio), providers=["CPUExecutionProvider"])
     tokenizador = Tokenizer.from_file(str(directorio / "tokenizer.json"))
-    tokenizador.enable_truncation(max_length=MAX_TOKENS)
     id2label = {int(k): v for k, v in json.loads((directorio / "id2label.json").read_text(encoding="utf-8")).items()}
     entradas = {i.name for i in sesion.get_inputs()}
 
     def _ner_trozo(fragmento: str) -> list:
         enc = tokenizador.encode(fragmento)
+        if len(enc.ids) > MAX_TOKENS and len(fragmento) > 1:
+            # Nada se trunca en silencio: si el trozo excede el límite de tokens (emojis, [UNK]...), se parte y se reintenta.
+            resultado = []
+            for desp, sub in trozos(fragmento, max_chars=len(fragmento) // 2 + 1):
+                resultado += [{**e, "start": e["start"] + desp, "end": e["end"] + desp} for e in _ner_trozo(sub)]
+            return resultado
         campos = {
             "input_ids": enc.ids,
             "attention_mask": enc.attention_mask,

@@ -137,3 +137,20 @@ def test_nombre_despues_del_token_512(ner):
 def test_mayusculas_sostenidas_quedan_ocultas(ner):
     salida = _ocultar(ner, "Paciente LUCIA HERNANDEZ, 29 años")
     assert "LUCIA" not in salida and "HERNANDEZ" not in salida
+
+
+@pytest.mark.modelo
+def test_trozo_con_mas_de_512_tokens_no_se_trunca_en_silencio(ner):
+    """Regresión: un trozo de <1000 caracteres puede superar 512 tokens (puntuación pegada = 1 token por signo)."""
+    for relleno in ("😀 " * 300, ".,;:" * 200 + " "):
+        salida = _ocultar(ner, relleno + "Su hermana Dayana Torres")
+        assert "Dayana" not in salida and "Torres" not in salida
+
+
+@pytest.mark.modelo
+def test_nombre_en_el_limite_entre_trozos(ner):
+    relleno = "tristeza persistente e insomnio. "
+    for n in range(26, 34):
+        texto = relleno * n + "Su hermana Dayana Torres vive aquí."
+        salida = _ocultar(ner, texto)
+        assert "Dayana" not in salida and "Torres" not in salida, n
