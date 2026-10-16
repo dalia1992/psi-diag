@@ -83,3 +83,44 @@ def test_archivo_se_envia_con_confirmacion(servidor, tmp_path):
     foto.write_bytes(b"\xff\xd8\xff" + b"0" * 50)
     assert probar_caso.main([url, "--archivo", str(foto), "--confirma-ocr", "--env-file", str(tmp_path / "no")]) == 0
     assert datos["recibido"]["largo"] > 50
+
+
+def test_error_con_forma_rara_no_revienta(tmp_path):
+    class Manejador(http.server.BaseHTTPRequestHandler):
+        def do_POST(self):
+            self.rfile.read(int(self.headers.get("content-length", 0)))
+            cuerpo = b'{"error": ["lista"]}'
+            self.send_response(400)
+            self.send_header("Content-Length", str(len(cuerpo)))
+            self.end_headers()
+            self.wfile.write(cuerpo)
+
+        def log_message(self, *a):
+            pass
+
+    s = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Manejador)
+    threading.Thread(target=s.serve_forever, daemon=True).start()
+    try:
+        assert probar_caso.main([f"http://127.0.0.1:{s.server_port}", "--texto", "x" * 30, "--env-file", str(tmp_path / "no")]) == 1
+    finally:
+        s.shutdown()
+
+
+def test_fallos_propios_salen_con_2_sin_mensaje(capsys, tmp_path):
+    env = tmp_path / "env"
+    env.write_text("ACCESS_CODE=códigoñ-secreto\n", encoding="utf-8")
+    assert probar_caso.main(["http://127.0.0.1:9", "--texto", "x" * 30, "--env-file", str(env)]) == 2
+    assert probar_caso.main(["http://127.0.0.1:9", "--archivo", str(tmp_path / "no.jpg"), "--env-file", str(env)]) == 2
+    salida = capsys.readouterr().out
+    assert "secreto" not in salida and "no.jpg" not in salida and "fallo:" in salida
+
+
+def test_codigo_no_ascii_viaja_y_resultado_se_guarda_en_modo_600(servidor, tmp_path):
+    datos, url = servidor
+    datos["eventos"] = [_resultado("ok")]
+    env = tmp_path / "env"
+    env.write_text("ACCESS_CODE=códigoñ\n", encoding="utf-8")
+    salida = tmp_path / "r.json"
+    assert probar_caso.main([url, "--texto", "x" * 30, "--env-file", str(env), "--guardar-resultado", str(salida)]) == 0
+    assert (salida.stat().st_mode & 0o777) == 0o600
+    assert json.loads(salida.read_text(encoding="utf-8"))["estado_final"] == "ok"

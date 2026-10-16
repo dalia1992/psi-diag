@@ -3,7 +3,8 @@
 Uso: python scripts/probar_caso.py http://localhost:8000 --texto "..." | --archivo foto.jpg --confirma-ocr
 El código de acceso se lee del archivo de entorno (variable ACCESS_CODE) y nunca se imprime ni va en la línea de comandos.
 Imprime un renglón por paso y un resumen del resultado (solo códigos y títulos, no el cuerpo del reporte).
-Sale con 0 solo si el estado final es el esperado (`ok`, o el de --esperar)."""
+Sale con 0 solo si el estado final es el esperado (`ok`, o el de --esperar); con 2 ante cualquier fallo del propio script.
+--timeout (300 s por omisión) es el tiempo máximo sin recibir datos; el servidor corta a los 280 s con un error reintentable."""
 from __future__ import annotations
 
 import argparse
@@ -49,7 +50,7 @@ def linea_paso(e: dict) -> str:
 
 def enviar(url: str, texto, archivo, confirma_ocr: bool, codigo: str, timeout: float):
     """Hace el POST y devuelve la lista de eventos, imprimiendo cada paso al llegar."""
-    cabeceras = {"x-access-code": codigo} if codigo else {}
+    cabeceras = {"x-access-code": codigo.encode("utf-8")} if codigo else {}
     datos = {"texto": texto} if texto is not None else {"confirma_ocr": "true" if confirma_ocr else "false"}
     archivos = {"archivo": (archivo.name, archivo.read_bytes())} if archivo is not None else None
     eventos, buffer = [], ""
@@ -60,6 +61,8 @@ def enviar(url: str, texto, archivo, confirma_ocr: bool, codigo: str, timeout: f
             try:
                 e = r.json().get("error", {})
             except ValueError:
+                e = {}
+            if not isinstance(e, dict):
                 e = {}
             print(f"HTTP {r.status_code} codigo={e.get('codigo', '?')} mensaje={e.get('mensaje', '')}")
             return [{"tipo": "error", "error": e}]
@@ -81,15 +84,15 @@ def main(argv=None) -> int:
     p.add_argument("--env-file", "--codigo-desde-env", dest="env_file", default=ENV_PREDETERMINADO)
     p.add_argument("--confirma-ocr", action="store_true")
     p.add_argument("--esperar", default="ok", help="estado_final esperado (predeterminado: ok)")
-    p.add_argument("--timeout", type=float, default=320)
+    p.add_argument("--timeout", type=float, default=300)
     p.add_argument("--guardar-resultado", type=Path, help="guarda el resultado JSON (contiene el caso: usa /private/tmp)")
     a = p.parse_args(argv)
 
     inicio = time.perf_counter()
     try:
         eventos = enviar(a.url, a.texto, a.archivo, a.confirma_ocr, leer_codigo(a.env_file), a.timeout)
-    except httpx.HTTPError as e:
-        print(f"fallo de conexión: {type(e).__name__}")
+    except Exception as e:  # noqa: BLE001  solo el nombre del tipo: el mensaje podría traer el código o el caso
+        print(f"fallo: {type(e).__name__}")
         return 2
     total = time.perf_counter() - inicio
 
@@ -107,8 +110,13 @@ def main(argv=None) -> int:
     print(f"advertencias: {len(r.get('advertencias') or [])}")
     print(f"total_s: {total:.1f}")
     if a.guardar_resultado:
-        a.guardar_resultado.write_text(json.dumps(r, ensure_ascii=False), encoding="utf-8")
-        os.chmod(a.guardar_resultado, 0o600)
+        try:
+            fd = os.open(a.guardar_resultado, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(r, f, ensure_ascii=False)
+        except Exception as e:  # noqa: BLE001
+            print(f"fallo: {type(e).__name__}")
+            return 2
     return 0 if r.get("estado_final") == a.esperar else 1
 
 
