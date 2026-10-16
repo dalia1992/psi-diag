@@ -32,6 +32,8 @@ BACKEND = "langchain"
 MAX_POR_MINUTO = int(os.getenv("MAX_POR_MINUTO", "8"))   # consultas por minuto y por visitante
 MIN_TEXTO, MAX_TEXTO = 20, 8000
 MAX_BYTES_ARCHIVO = 4_000_000
+MAX_BYTES_TOTAL = 4_200_000   # suma de todos los archivos de una solicitud: Vercel rechaza cuerpos de más de 4.5 MB
+MAX_ARCHIVOS = 10             # hasta 10 imágenes (notas en varias hojas) o un solo PDF
 MAX_PAGINAS_PDF = 10
 PING_S = 15
 MAX_BYTES_REPORTE = 200_000   # cuerpo máximo de POST /api/exportar
@@ -188,10 +190,10 @@ def _validar_archivo(nombre: str, datos: bytes) -> str:
 async def leer_entrada(request: Request) -> tuple[str, str | None, bytes | None, str]:
     """Devuelve (via, texto, bytes del archivo, extensión del archivo) ya validados."""
     declarado = request.headers.get("content-length", "")
-    if declarado.isdigit() and int(declarado) > MAX_BYTES_ARCHIVO + 200_000:
-        raise ErrorApi("archivo", "La solicitud es demasiado grande.", 413, "cuerpo mayor a 4 MB")
+    if declarado.isdigit() and int(declarado) > MAX_BYTES_TOTAL + 250_000:
+        raise ErrorApi("archivo", "Los archivos son demasiado grandes (máximo 4 MB en total).", 413, "cuerpo mayor a 4 MB")
     try:
-        formulario = await request.form(max_files=1, max_fields=10)
+        formulario = await request.form(max_files=MAX_ARCHIVOS + 1, max_fields=10)
     except Exception:  # noqa: BLE001
         raise ErrorApi("validacion", "La solicitud no es válida.", 400, "no es multipart/form-data") from None
     try:
@@ -200,19 +202,41 @@ async def leer_entrada(request: Request) -> tuple[str, str | None, bytes | None,
         await formulario.close()   # libera ya el archivo subido (datos personales), sin esperar al recolector
 
 
+def _valores(formulario, campo: str) -> list:
+    if hasattr(formulario, "getlist"):
+        return formulario.getlist(campo)
+    return [formulario[campo]] if campo in formulario else []
+
+
 async def _entrada_de(formulario) -> tuple[str, str | None, bytes | None, str]:
     texto = formulario.get("texto")
-    archivo = formulario.get("archivo")
+    archivos = [a for campo in ("archivos", "archivo") for a in _valores(formulario, campo) if hasattr(a, "read")]
     tiene_texto = isinstance(texto, str) and texto.strip() != ""
-    tiene_archivo = archivo is not None and hasattr(archivo, "read")
-    if tiene_texto and tiene_archivo:
+    if tiene_texto and archivos:
         raise ErrorApi("validacion", "Envía el texto del caso o un archivo, no ambos.", 400, "texto y archivo a la vez")
-    if tiene_archivo:
+    if archivos:
         if str(formulario.get("confirma_ocr", "")).strip().lower() != "true":
             raise ErrorApi("ocr", "Confirma que aceptas que el archivo se lea con servicios externos (OpenRouter y Mistral).", 400, "falta confirma_ocr=true")
-        datos = await archivo.read(MAX_BYTES_ARCHIVO + 1)
-        extension = await asyncio.to_thread(_validar_archivo, archivo.filename or "", datos)   # pypdf y Pillow son síncronos
-        return "archivo", None, datos, extension
+        if len(archivos) > MAX_ARCHIVOS:
+            raise ErrorApi("archivo", f"Puedes subir hasta {MAX_ARCHIVOS} imágenes o un PDF.", 400, f"{len(archivos)} archivos")
+        contenidos, total = [], 0
+        for archivo in archivos:
+            datos = await archivo.read(MAX_BYTES_ARCHIVO + 1)
+            total += len(datos)
+            if total > MAX_BYTES_TOTAL:
+                raise ErrorApi("archivo", "Los archivos son demasiado grandes (máximo 4 MB en total).", 413, f"{total} bytes")
+            contenidos.append((archivo.filename or "", datos))
+        extensiones = [await asyncio.to_thread(_validar_archivo, nombre, datos) for nombre, datos in contenidos]   # pypdf y Pillow son síncronos
+        if len(contenidos) == 1:
+            return "archivo", None, contenidos[0][1], extensiones[0]
+        if ".pdf" in extensiones:
+            raise ErrorApi("archivo", "Sube un solo PDF o varias imágenes, sin mezclarlos.", 400, "varios archivos con un PDF")
+        from psi_diag.ocr import OcrError, imagenes_a_pdf
+        try:   # las hojas viajan como un solo PDF, una página por imagen y en el orden en que se eligieron
+            unido = await asyncio.to_thread(imagenes_a_pdf, [(n or f"imagen {i + 1}", d) for i, (n, d) in enumerate(contenidos)])
+        except OcrError as e:
+            raise ErrorApi("archivo", str(e).split(": ", 1)[-1], 400, "no se pudieron unir las imágenes") from None
+        return "archivo", None, unido, ".pdf"
     if not tiene_texto:
         raise ErrorApi("validacion", "Escribe el caso o sube un archivo.", 400, "falta texto o archivo")
     limpio = limpiar_texto(texto, MAX_TEXTO + 1)
@@ -262,6 +286,19 @@ async def resolver_componentes():
     return await obtener_componentes()
 
 
+def instancia_fria() -> bool:
+    """True si esta instancia todavía tiene que cargar el modelo NER y conectarse a la CIE-11 (primera consulta tras dormir)."""
+    if componentes_de_prueba is not None:
+        return False
+    from componentes import componentes_listos
+    return not componentes_listos()
+
+
+def evento_conexion(estado: str) -> dict:
+    from psi_diag.grafo import _paso
+    return _paso("conexion", estado)
+
+
 def _soltar_archivo(ruta: Path | None, activo: threading.Event, fin: threading.Event) -> None:
     """Borra el archivo temporal. Un hilo de OCR no se puede interrumpir: si sigue leyendo, se borra al terminar."""
     if ruta is None:
@@ -297,11 +334,16 @@ async def transmitir(entrada: str, ruta: Path | None, id_solicitud: str, via: st
             limite = 280.0
         deadline = time.monotonic() + limite
         try:
+            fria = instancia_fria()
+            if fria:   # el arranque en frío tarda: se avisa para que la pantalla no parezca detenida
+                yield evento_sse(evento_conexion("en_curso"))
             try:
                 c = await asyncio.wait_for(resolver_componentes(), timeout=limite)
             except FlujoDetenido:   # p. ej. el servidor de la CIE-11 no respondió al arrancar: se puede reintentar
                 raise ErrorApi("backend", "El servicio de consulta de la CIE-11 no respondió. Puedes intentarlo de nuevo en un momento.",
                                503, "servicio de consulta no disponible", True) from None
+            if fria:
+                yield evento_sse(evento_conexion("listo"))
             if c.ocr is not None:
                 original = c.ocr
 
@@ -378,6 +420,24 @@ def salud() -> dict:
         "configurado": bool(os.getenv("OPENROUTER_API_KEY", "").strip()),
         "requiere_codigo": bool(os.getenv("ACCESS_CODE", "").strip()),
     }
+
+
+@app.get("/api/calentar")
+async def calentar():
+    """La pantalla lo llama al abrirse, sin esperar la respuesta: arma el modelo NER y la conexión a la CIE-11 en esta
+    instancia para que el primer caso no pague el arranque en frío. Responde cuando termina (en Vercel una instancia
+    puede congelarse al responder, así que no se deja trabajo en segundo plano). No procesa nada ni usa el LLM."""
+    cabeceras = {"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"}
+    if modo_demo() or (componentes_de_prueba is None and not os.getenv("OPENROUTER_API_KEY", "").strip()):
+        return responder({"listo": False}, 200)
+    inicio = time.perf_counter()
+    try:
+        await asyncio.wait_for(resolver_componentes(), timeout=120)
+        estado = "ok"
+    except Exception as e:  # noqa: BLE001  el arranque se reintenta con la primera consulta real
+        estado = type(e).__name__
+    registrar(id=uuid.uuid4().hex[:8], estado=estado, ms=milisegundos(inicio), via="calentar")
+    return responder({"listo": estado == "ok"}, 200)
 
 
 @app.post("/api/acceso")

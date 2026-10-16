@@ -374,3 +374,84 @@ def test_los_avisos_del_log_solo_llevan_el_tipo_de_la_excepcion(caplog):
     assert "RuntimeError" in registro and "FlujoDetenido" in registro
     for secreto in ("Laura", "CUENTA-SECRETA", "500"):
         assert secreto not in registro
+
+
+# ----------------------------------------------------------------------------- relevancia con JEV y avance por fuente
+from psi_diag import progreso  # noqa: E402
+from psi_diag.guias import _estado_relevancia, crear_clasificador_relevancia_jev, filtrar_relevantes  # noqa: E402
+
+CANDIDATOS_CON_CRITERIOS = [{
+    "codigo": "6A70", "titulo": "Trastorno depresivo de episodio único", "url": "u",
+    "definicion": "Episodio depresivo único de al menos dos semanas.", "inclusiones": ["Depresión mayor"], "exclusiones": ["Duelo"],
+}]
+
+
+def relevancia_por_titulo(**probabilidades):
+    return lambda guia, candidatos: probabilidades.get(guia["titulo"], 0.0)
+
+
+def test_el_estado_de_relevancia_lleva_titulo_fragmento_y_criterios_cie11():
+    guia = {"titulo": "GPC depresión", "extracto": "x" * 2000}
+    estado = _estado_relevancia(guia, CANDIDATOS_CON_CRITERIOS)
+    assert "6A70" in estado and "Episodio depresivo único" in estado
+    assert "Incluye: Depresión mayor" in estado and "Excluye: Duelo" in estado
+    assert "GPC depresión" in estado and len(estado) < 1500
+
+
+def test_solo_se_conservan_las_guias_relevantes():
+    guias = [{"titulo": "A", "url": "a"}, {"titulo": "B", "url": "b"}]
+    relevantes, verificadas = filtrar_relevantes(guias, CANDIDATOS, relevancia_por_titulo(A=0.9, B=0.1))
+    assert [g["titulo"] for g in relevantes] == ["A"] and verificadas
+
+
+def test_si_el_clasificador_falla_con_una_guia_esa_guia_se_conserva():
+    def clasificar(guia, candidatos):
+        if guia["titulo"] == "B":
+            raise FlujoDetenido("sin red")
+        return 0.0
+
+    relevantes, verificadas = filtrar_relevantes([{"titulo": "A", "url": "a"}, {"titulo": "B", "url": "b"}], CANDIDATOS, clasificar)
+    assert [g["titulo"] for g in relevantes] == ["B"] and not verificadas
+
+
+def test_buscar_guias_descarta_las_irrelevantes_y_no_falla_si_una_fuente_queda_vacia():
+    ruido = cita("https://www.imss.gob.mx/ruido", "Aviso de privacidad")
+    post = PostFalso(respuesta_con(IMSS, ruido), respuesta_con(APA))
+    guias = buscar(post, Decisor(["apa"]), clasificar=relevancia_por_titulo(**{"GPC IMSS": 0.9, "Guía APA": 0.2}))
+    assert [g["titulo"] for g in guias] == ["GPC IMSS"]
+
+
+def test_buscar_guias_avisa_el_avance_de_cada_fuente():
+    eventos = []
+    progreso.registrar_emisor(eventos.append)
+    try:
+        post = PostFalso(respuesta_con(IMSS, cita("https://www.imss.gob.mx/ruido", "Ruido")))
+        buscar(post, Decisor([]), clasificar=relevancia_por_titulo(**{"GPC IMSS": 0.9}))
+    finally:
+        progreso.registrar_emisor(None)
+    por_fuente = {}
+    for e in eventos:
+        assert e["tipo"] == "detalle" and e["paso"] == "guias"
+        por_fuente.setdefault(e["clave"], []).append(e["linea"]["texto"])
+    assert por_fuente["imss"] == ["buscando…", "1 relevante(s) de 2 encontrada(s)"]
+    assert por_fuente["apa"] == ["no hizo falta"] and por_fuente["oms"] == ["no hizo falta"]
+    assert all(e["linea"]["negrita"] in ("IMSS:", "APA:", "OMS:") for e in eventos)
+
+
+def test_el_clasificador_jev_lee_la_probabilidad_y_manda_criterios_y_guia():
+    llamadas = []
+
+    def post(url, json=None, headers=None, timeout=None):
+        llamadas.append(json)
+        return RespuestaFalsa(cuerpo={"answers": {"es_relevante": {"noul": 0.83}}})
+
+    clasificar = crear_clasificador_relevancia_jev("clave", post=post)
+    assert clasificar({"titulo": "GPC", "extracto": "texto"}, CANDIDATOS_CON_CRITERIOS) == 0.83
+    assert "6A70" in llamadas[0]["state"] and "GPC" in llamadas[0]["state"]
+    assert llamadas[0]["questions"]["es_relevante"]["type"] == "noul"
+
+
+def test_el_clasificador_jev_rechaza_formatos_inesperados():
+    clasificar = crear_clasificador_relevancia_jev("clave", post=lambda *a, **k: RespuestaFalsa(cuerpo={"otra": 1}))
+    with pytest.raises(FlujoDetenido):
+        clasificar({"titulo": "GPC"}, CANDIDATOS_CON_CRITERIOS)

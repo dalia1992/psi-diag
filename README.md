@@ -51,7 +51,7 @@ Prueba de punta a punta contra un servidor en marcha: `~/.venvs/mvp_psico/bin/py
 app.py                 entrada en la raíz (Vercel y `uvicorn app:app`); carga backend/src/servidor.py
 backend/
   src/
-    servidor.py        API (/api/health, /api/caso por SSE, /api/exportar/{docx|pdf}); en local también sirve public/
+    servidor.py        API (/api/health, /api/calentar, /api/caso por SSE, /api/exportar/{docx|pdf}); en local también sirve public/
     componentes.py, errores_api.py   armado de componentes y errores de la API
     psi_diag/          flujo de análisis (OCR, anonimización, extracción, CIE-11, guías, reporte)
     exportar/          generación de Word y PDF

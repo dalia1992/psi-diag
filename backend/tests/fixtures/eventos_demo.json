@@ -1,228 +1,281 @@
 [
- {
-  "tipo": "paso",
-  "id": "lectura",
-  "titulo": "Lectura del archivo",
-  "estado": "en_curso"
- },
- {
-  "tipo": "paso",
-  "id": "lectura",
-  "titulo": "Lectura del archivo",
-  "estado": "listo",
-  "detalle": {
-   "resumen": "Texto leído del archivo (revisa que sea correcto)",
-   "lineas": [
-    "Laura Mendoza, mujer de 34 años, vive en Guadalajara. Refiere tristeza casi todos los días y faltas al trabajo desde hace cuatro meses."
-   ]
-  }
- },
- {
-  "tipo": "paso",
-  "id": "proteccion",
-  "titulo": "Protección de datos personales",
-  "estado": "en_curso"
- },
- {
-  "tipo": "paso",
-  "id": "proteccion",
-  "titulo": "Protección de datos personales",
-  "estado": "listo",
-  "detalle": {
-   "resumen": "Datos personales ocultados antes del análisis: 2 (la detección automática puede fallar: revisa el texto que se envió a los servicios externos)",
-   "lineas": [
-    "Personas: 1 ([PER_1])",
-    "Lugares: 1 ([LOC_1])",
-    "[PER_1], mujer de 34 años, vive en [LOC_1]. Refiere tristeza casi todos los días y faltas al trabajo desde hace cuatro meses."
-   ]
-  }
- },
- {
-  "tipo": "paso",
-  "id": "verificacion",
-  "titulo": "Verificación del texto",
-  "estado": "en_curso"
- },
- {
-  "tipo": "paso",
-  "id": "verificacion",
-  "titulo": "Verificación del texto",
-  "estado": "listo",
-  "detalle": {
-   "resumen": "El texto describe un caso clínico",
-   "lineas": []
-  }
- },
- {
-  "tipo": "paso",
-  "id": "sintomas",
-  "titulo": "Identificación de síntomas",
-  "estado": "en_curso"
- },
- {
-  "tipo": "paso",
-  "id": "sintomas",
-  "titulo": "Identificación de síntomas",
-  "estado": "listo",
-  "detalle": {
-   "resumen": "Síntomas identificados: 2",
-   "lineas": [
-    {
-     "negrita": "Emocionales:",
-     "texto": "Tristeza casi todos los días; Sentimientos de culpa"
-    },
-    {
-     "negrita": "Cognitivos:",
-     "texto": "Dificultad para concentrarse"
-    },
-    {
-     "negrita": "Conductuales:",
-     "texto": "Insomnio de conciliación"
-    },
-    {
-     "negrita": "Por recabar:",
-     "texto": "Severidad de los síntomas; Antecedentes familiares"
-    }
-   ]
-  }
- },
- {
-  "tipo": "paso",
-  "id": "cie11",
-  "titulo": "Búsqueda de diagnósticos en la CIE-11",
-  "estado": "en_curso"
- },
- {
-  "tipo": "paso",
-  "id": "cie11",
-  "titulo": "Búsqueda de diagnósticos en la CIE-11",
-  "estado": "listo",
-  "detalle": {
-   "resumen": "Diagnósticos candidatos en la CIE-11: 1",
-   "lineas": [
-    {
-     "negrita": "6A70",
-     "texto": "· Trastorno depresivo de episodio único"
-    },
-    "Otros códigos relacionados: 1",
-    "Obteniendo el código CIE-11",
-    "Revisando los criterios clínicos"
-   ]
-  }
- },
- {
-  "tipo": "paso",
-  "id": "guias",
-  "titulo": "Búsqueda de guías clínicas (IMSS, APA, OMS)",
-  "estado": "en_curso"
- },
- {
-  "tipo": "paso",
-  "id": "guias",
-  "titulo": "Búsqueda de guías clínicas (IMSS, APA, OMS)",
-  "estado": "listo",
-  "detalle": {
-   "resumen": "Guías clínicas consultadas: 1",
-   "lineas": [
-    "IMSS (México) · Guías de práctica clínica: Guía de práctica clínica: diagnóstico y tratamiento del episodio depresivo"
-   ]
-  }
- },
- {
-  "tipo": "paso",
-  "id": "reporte",
-  "titulo": "Redacción del reporte",
-  "estado": "en_curso"
- },
- {
-  "tipo": "paso",
-  "id": "reporte",
-  "titulo": "Redacción del reporte",
-  "estado": "listo",
-  "detalle": {
-   "resumen": "Reporte redactado",
-   "lineas": [
-    "Hipótesis: 1",
-    "Pruebas sugeridas: 1",
-    "Información por recabar: 1"
-   ]
-  }
- },
- {
-  "tipo": "resultado",
-  "resultado": {
-   "estado_final": "ok",
-   "razon_amigable": "",
-   "reporte": {
-    "fecha": "2026-10-15",
-    "caso": {
-     "paciente_ref": "Laura Mendoza",
-     "edad": 34,
-     "sexo": "femenino",
-     "temporalidad": null
-    },
-    "sintomas": {
-     "cognitivos": [],
-     "emocionales": [
-      "tristeza"
-     ],
-     "conductuales": [],
-     "afectacion_social": [
-      "faltas al trabajo"
-     ]
-    },
-    "hipotesis": [
-     {
-      "codigo": "6A70",
-      "titulo": "Trastorno depresivo de episodio único",
-      "url": "https://icd.who.int/browse/2024-01/mms/es#1001",
-      "justificacion": "Tristeza persistente con afectación laboral durante cuatro meses.",
-      "criterios_cumplidos": [
-       "Ánimo deprimido casi todos los días"
-      ],
-      "criterios_no_cumplidos": [
-       "Antecedentes de episodios previos sin confirmar"
+  {
+    "tipo": "paso",
+    "id": "lectura",
+    "titulo": "Lectura del archivo",
+    "estado": "en_curso"
+  },
+  {
+    "tipo": "paso",
+    "id": "lectura",
+    "titulo": "Lectura del archivo",
+    "estado": "listo",
+    "detalle": {
+      "resumen": "Texto leído del archivo (revisa que sea correcto)",
+      "lineas": [
+        "Laura Mendoza, mujer de 34 años, vive en Guadalajara. Refiere tristeza casi todos los días y faltas al trabajo desde hace cuatro meses."
       ]
-     }
-    ],
-    "ambiguedades": [
-     "Podría tratarse de un cuadro recurrente"
-    ],
-    "diferenciales": [
-     "Descartar trastorno bipolar"
-    ],
-    "alternativas": [
-     {
-      "codigo": "6A71",
-      "titulo": "Trastorno depresivo recurrente",
-      "url": "https://icd.who.int/browse/2024-01/mms/es#1002"
-     }
-    ],
-    "datos_faltantes": [
-     "Antecedentes de episodios previos"
-    ],
-    "pruebas": [
-     {
-      "nombre": "Inventario de Depresión de Beck",
-      "motivo": "Cuantificar la severidad",
-      "guia": null,
-      "cita": ""
-     }
-    ],
-    "guias": [
-     {
-      "tipo": "imss",
-      "etiqueta": "IMSS (México) · Guías de práctica clínica",
-      "titulo": "Guía de práctica clínica: diagnóstico y tratamiento del episodio depresivo",
-      "url": "https://www.imss.gob.mx/guias/depresion",
-      "cita": ""
-     }
-    ],
-    "aviso": "Este reporte contiene hipótesis de apoyo generadas con ayuda de IA a partir de la CIE-11. No es un diagnóstico: la decisión clínica es del profesional."
-   },
-   "advertencias": [
-    "Alguna prueba sugerida quedó sin referencia, porque su cita no pudo comprobarse en las guías consultadas."
-   ]
+    }
+  },
+  {
+    "tipo": "paso",
+    "id": "proteccion",
+    "titulo": "Protección de datos personales",
+    "estado": "en_curso"
+  },
+  {
+    "tipo": "paso",
+    "id": "proteccion",
+    "titulo": "Protección de datos personales",
+    "estado": "listo",
+    "detalle": {
+      "resumen": "Datos personales ocultados antes del análisis: 2 (la detección automática puede fallar: revisa el texto que se envió a los servicios externos)",
+      "lineas": [
+        "Personas: 1 ([PER_1])",
+        "Lugares: 1 ([LOC_1])",
+        "[PER_1], mujer de 34 años, vive en [LOC_1]. Refiere tristeza casi todos los días y faltas al trabajo desde hace cuatro meses."
+      ]
+    }
+  },
+  {
+    "tipo": "paso",
+    "id": "verificacion",
+    "titulo": "Verificación del texto",
+    "estado": "en_curso"
+  },
+  {
+    "tipo": "paso",
+    "id": "verificacion",
+    "titulo": "Verificación del texto",
+    "estado": "listo",
+    "detalle": {
+      "resumen": "El texto describe un caso clínico",
+      "lineas": []
+    }
+  },
+  {
+    "tipo": "paso",
+    "id": "sintomas",
+    "titulo": "Identificación de síntomas",
+    "estado": "en_curso"
+  },
+  {
+    "tipo": "paso",
+    "id": "sintomas",
+    "titulo": "Identificación de síntomas",
+    "estado": "listo",
+    "detalle": {
+      "resumen": "Síntomas identificados: 2",
+      "lineas": [
+        {
+          "negrita": "Emocionales:",
+          "texto": "Tristeza casi todos los días; Sentimientos de culpa"
+        },
+        {
+          "negrita": "Cognitivos:",
+          "texto": "Dificultad para concentrarse"
+        },
+        {
+          "negrita": "Conductuales:",
+          "texto": "Insomnio de conciliación"
+        },
+        {
+          "negrita": "Por recabar:",
+          "texto": "Severidad de los síntomas; Antecedentes familiares"
+        }
+      ]
+    }
+  },
+  {
+    "tipo": "paso",
+    "id": "cie11",
+    "titulo": "Búsqueda de diagnósticos en la CIE-11",
+    "estado": "en_curso"
+  },
+  {
+    "tipo": "detalle",
+    "paso": "cie11",
+    "linea": {
+      "negrita": "Buscando el trastorno en la CIE-11:",
+      "texto": "«tristeza persistente; insomnio»"
+    }
+  },
+  {
+    "tipo": "detalle",
+    "paso": "cie11",
+    "linea": {
+      "negrita": "Obteniendo el código CIE-11:",
+      "texto": "«trastorno depresivo»"
+    }
+  },
+  {
+    "tipo": "paso",
+    "id": "cie11",
+    "titulo": "Búsqueda de diagnósticos en la CIE-11",
+    "estado": "listo",
+    "detalle": {
+      "resumen": "Diagnósticos candidatos en la CIE-11: 1",
+      "lineas": [
+        {
+          "negrita": "6A70",
+          "texto": "· Trastorno depresivo de episodio único"
+        },
+        "Otros códigos relacionados: 1",
+        "Obteniendo el código CIE-11",
+        "Revisando los criterios clínicos"
+      ]
+    }
+  },
+  {
+    "tipo": "paso",
+    "id": "guias",
+    "titulo": "Búsqueda de guías clínicas (IMSS, APA, OMS)",
+    "estado": "en_curso"
+  },
+  {
+    "tipo": "detalle",
+    "paso": "guias",
+    "clave": "imss",
+    "linea": {
+      "negrita": "IMSS:",
+      "texto": "buscando…"
+    }
+  },
+  {
+    "tipo": "detalle",
+    "paso": "guias",
+    "clave": "imss",
+    "linea": {
+      "negrita": "IMSS:",
+      "texto": "2 relevante(s) de 3 encontrada(s)"
+    }
+  },
+  {
+    "tipo": "detalle",
+    "paso": "guias",
+    "clave": "apa",
+    "linea": {
+      "negrita": "APA:",
+      "texto": "no hizo falta"
+    }
+  },
+  {
+    "tipo": "detalle",
+    "paso": "guias",
+    "clave": "oms",
+    "linea": {
+      "negrita": "OMS:",
+      "texto": "no hizo falta"
+    }
+  },
+  {
+    "tipo": "paso",
+    "id": "guias",
+    "titulo": "Búsqueda de guías clínicas (IMSS, APA, OMS)",
+    "estado": "listo",
+    "detalle": {
+      "resumen": "Guías clínicas consultadas: 1",
+      "lineas": [
+        "IMSS (México) · Guías de práctica clínica: Guía de práctica clínica: diagnóstico y tratamiento del episodio depresivo"
+      ]
+    }
+  },
+  {
+    "tipo": "paso",
+    "id": "reporte",
+    "titulo": "Redacción del reporte",
+    "estado": "en_curso"
+  },
+  {
+    "tipo": "paso",
+    "id": "reporte",
+    "titulo": "Redacción del reporte",
+    "estado": "listo",
+    "detalle": {
+      "resumen": "Reporte redactado",
+      "lineas": [
+        "Hipótesis: 1",
+        "Pruebas sugeridas: 1",
+        "Información por recabar: 1"
+      ]
+    }
+  },
+  {
+    "tipo": "resultado",
+    "resultado": {
+      "estado_final": "ok",
+      "razon_amigable": "",
+      "reporte": {
+        "fecha": "2026-10-15",
+        "caso": {
+          "paciente_ref": "Laura Mendoza",
+          "edad": 34,
+          "sexo": "femenino",
+          "temporalidad": null
+        },
+        "sintomas": {
+          "cognitivos": [],
+          "emocionales": [
+            "tristeza"
+          ],
+          "conductuales": [],
+          "afectacion_social": [
+            "faltas al trabajo"
+          ]
+        },
+        "hipotesis": [
+          {
+            "codigo": "6A70",
+            "titulo": "Trastorno depresivo de episodio único",
+            "url": "https://icd.who.int/browse/2024-01/mms/es#1001",
+            "justificacion": "Tristeza persistente con afectación laboral durante cuatro meses.",
+            "criterios_cumplidos": [
+              "Ánimo deprimido casi todos los días"
+            ],
+            "criterios_no_cumplidos": [
+              "Antecedentes de episodios previos sin confirmar"
+            ]
+          }
+        ],
+        "ambiguedades": [
+          "Podría tratarse de un cuadro recurrente"
+        ],
+        "diferenciales": [
+          "Descartar trastorno bipolar"
+        ],
+        "alternativas": [
+          {
+            "codigo": "6A71",
+            "titulo": "Trastorno depresivo recurrente",
+            "url": "https://icd.who.int/browse/2024-01/mms/es#1002"
+          }
+        ],
+        "datos_faltantes": [
+          "Antecedentes de episodios previos"
+        ],
+        "pruebas": [
+          {
+            "nombre": "Inventario de Depresión de Beck",
+            "motivo": "Cuantificar la severidad",
+            "guia": null,
+            "cita": ""
+          }
+        ],
+        "guias": [
+          {
+            "tipo": "imss",
+            "etiqueta": "IMSS (México) · Guías de práctica clínica",
+            "titulo": "Guía de práctica clínica: diagnóstico y tratamiento del episodio depresivo",
+            "url": "https://www.imss.gob.mx/guias/depresion",
+            "cita": ""
+          }
+        ],
+        "aviso": "Este reporte contiene hipótesis de apoyo generadas con ayuda de IA a partir de la CIE-11. No es un diagnóstico: la decisión clínica es del profesional.",
+        "conclusion": "El cuadro descrito es compatible, como hipótesis, con un trastorno depresivo de episodio único. Se recomienda confirmar la duración e intensidad de los síntomas y su impacto funcional antes de formular un diagnóstico. Como siguientes pasos, conviene recabar los datos faltantes, aplicar las pruebas sugeridas y descartar los diferenciales señalados. La decisión clínica corresponde al profesional."
+      },
+      "advertencias": [
+        "Alguna prueba sugerida quedó sin referencia, porque su cita no pudo comprobarse en las guías consultadas."
+      ]
+    }
   }
- }
 ]

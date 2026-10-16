@@ -12,6 +12,7 @@ class Paso:
 
 
 PASOS = (
+    Paso("conexion", "Conexión con los servicios"),
     Paso("lectura", "Lectura del archivo"),
     Paso("proteccion", "Protección de datos personales"),
     Paso("verificacion", "Verificación del texto"),
@@ -93,7 +94,7 @@ def _verificacion(datos: dict) -> dict:
     if datos.get("continuar"):
         return {"resumen": "El texto describe un caso clínico", "lineas": []}
     return {
-        "resumen": "El texto no parece describir un caso clínico, así que no se analiza",
+        "resumen": "El texto no parece ser un caso de psicología clínica, así que no se analiza",
         "lineas": ["Describe el caso con síntomas, duración y cómo afecta la vida diaria para continuar."],
     }
 
@@ -150,6 +151,7 @@ def _reporte(datos: dict) -> dict:
 
 
 _DETALLES = {
+    "conexion": lambda datos: {"resumen": "Servicios listos", "lineas": []},
     "lectura": _lectura,
     "proteccion": _proteccion,
     "verificacion": _verificacion,

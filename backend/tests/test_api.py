@@ -616,3 +616,76 @@ def test_en_local_la_pantalla_pide_al_navegador_revisar_si_hay_version_nueva(cli
 
 def test_la_api_sigue_sin_guardarse_en_cache(cliente):
     assert cliente.get("/api/health").headers.get("cache-control") != "no-cache"
+
+
+# ----------------------------------------------------------------------------- arranque en frío
+def test_calentar_arma_los_componentes_y_no_pide_codigo(cliente, monkeypatch):
+    monkeypatch.setenv("ACCESS_CODE", "secreto")
+    r = cliente.get("/api/calentar")
+    assert r.status_code == 200 and r.json() == {"listo": True}
+
+
+def test_calentar_sin_clave_no_intenta_nada(monkeypatch):
+    monkeypatch.setattr(modulo_app, "componentes_de_prueba", None)
+    r = TestClient(modulo_app.app).get("/api/calentar")
+    assert r.status_code == 200 and r.json() == {"listo": False}
+
+
+def test_una_instancia_fria_avisa_la_conexion_antes_de_los_demas_pasos(cliente, monkeypatch):
+    monkeypatch.setattr(modulo_app, "instancia_fria", lambda: True)
+    eventos = eventos_de(cliente.post("/api/caso", data={"texto": ENTRADA}))
+    pasos = [(e["id"], e["estado"]) for e in eventos if e["tipo"] == "paso"]
+    assert pasos[:2] == [("conexion", "en_curso"), ("conexion", "listo")]
+    assert eventos[-1]["tipo"] == "resultado"
+
+
+def test_una_instancia_tibia_no_muestra_la_conexion(cliente):
+    eventos = eventos_de(cliente.post("/api/caso", data={"texto": ENTRADA}))
+    assert "conexion" not in {e.get("id") for e in eventos}
+
+
+# ----------------------------------------------------------------------------- varias imágenes
+def png_valido(color=(200, 30, 30), lado=60) -> bytes:
+    import io
+    from PIL import Image
+    salida = io.BytesIO()
+    Image.new("RGB", (lado, lado), color).save(salida, "PNG")
+    return salida.getvalue()
+
+
+def test_varias_imagenes_se_unen_en_un_pdf_y_se_leen_como_un_solo_archivo(monkeypatch):
+    from pypdf import PdfReader
+    import io
+    leido = {}
+    componentes, _ = construir(ocr=lambda ruta: leido.update(paginas=len(PdfReader(ruta).pages), ruta=ruta) or "Paciente con tristeza persistente.")
+    monkeypatch.setattr(modulo_app, "componentes_de_prueba", componentes)
+    archivos = [("archivos", (f"hoja{i}.png", png_valido((i * 20, 10, 10)), "image/png")) for i in range(1, 4)]
+    r = TestClient(modulo_app.app).post("/api/caso", data={"confirma_ocr": "true"}, files=archivos)
+    assert r.status_code == 200
+    assert eventos_de(r)[-1]["resultado"]["estado_final"] == "ok"
+    assert leido["paginas"] == 3 and leido["ruta"].endswith(".pdf")
+
+
+def test_mas_de_diez_imagenes_se_rechazan(cliente):
+    archivos = [("archivos", (f"h{i}.png", png_valido(), "image/png")) for i in range(11)]
+    r = cliente.post("/api/caso", data={"confirma_ocr": "true"}, files=archivos)
+    assert r.status_code == 400 and r.json()["error"]["codigo"] == "archivo"
+
+
+def test_no_se_pueden_mezclar_un_pdf_y_una_imagen(cliente):
+    archivos = [("archivos", ("a.png", png_valido(), "image/png")), ("archivos", ("b.pdf", pdf_valido(), "application/pdf"))]
+    r = cliente.post("/api/caso", data={"confirma_ocr": "true"}, files=archivos)
+    assert r.status_code == 400 and "sin mezclarlos" in r.json()["error"]["mensaje"]
+
+
+def test_varias_imagenes_sin_confirmar_el_ocr_se_rechazan(cliente):
+    archivos = [("archivos", (f"h{i}.png", png_valido(), "image/png")) for i in range(2)]
+    r = cliente.post("/api/caso", data={}, files=archivos)
+    assert r.status_code == 400 and r.json()["error"]["codigo"] == "ocr"
+
+
+def test_el_total_de_los_archivos_no_puede_pasar_de_4_mb(cliente, monkeypatch):
+    monkeypatch.setattr(modulo_app, "MAX_BYTES_TOTAL", 1000)
+    archivos = [("archivos", (f"h{i}.png", png_valido(lado=200), "image/png")) for i in range(3)]
+    r = cliente.post("/api/caso", data={"confirma_ocr": "true"}, files=archivos)
+    assert r.status_code == 413

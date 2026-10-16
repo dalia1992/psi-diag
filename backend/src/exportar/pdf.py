@@ -14,7 +14,8 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.pdfmetrics import registerFontFamily, stringWidth
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen.canvas import Canvas
-from reportlab.platypus import HRFlowable, KeepTogether, Paragraph, SimpleDocTemplate, Spacer
+from reportlab.platypus import HRFlowable, KeepTogether, PageBreak, Paragraph, SimpleDocTemplate, Spacer, TableStyle
+from reportlab.platypus.tableofcontents import TableOfContents
 
 from . import comun
 from .comun import dicc, lista, lista_de_dicts, mayuscula_inicial, texto, url_segura
@@ -55,6 +56,9 @@ def _estilos() -> dict:
         "sub": ParagraphStyle("sub", **{**base, "fontSize": 11.5, "textColor": LAVANDA, "fontName": SEMI}, spaceAfter=8),
         "h1": ParagraphStyle("h1", **{**base, "fontName": NEGRITA, "fontSize": 14, "leading": 18, "textColor": AZUL}, spaceBefore=14, spaceAfter=3, keepWithNext=1),
         "h2": ParagraphStyle("h2", **{**base, "fontName": SEMI, "fontSize": 11.5, "leading": 16, "textColor": AZUL}, spaceBefore=8, spaceAfter=2, keepWithNext=1),
+        "indice_titulo": ParagraphStyle("indice_titulo", **{**base, "fontName": NEGRITA, "fontSize": 14, "leading": 18, "textColor": AZUL}, spaceBefore=6, spaceAfter=4),
+        "indice1": ParagraphStyle("indice1", **{**base, "fontName": SEMI}, leftIndent=0, spaceBefore=3, spaceAfter=1),
+        "indice2": ParagraphStyle("indice2", **{**base, "fontSize": 9.5, "leading": 13.5}, leftIndent=14, spaceAfter=0),
         "vineta": ParagraphStyle("vineta", **base, leftIndent=14, bulletIndent=3, spaceAfter=2),
         "nota": ParagraphStyle("nota", **{**base, "fontSize": 9.5, "leading": 13.5, "textColor": HexColor("#5A6480")}, spaceAfter=4),
         "aviso": ParagraphStyle("aviso", **base, backColor=FONDO, borderColor=MENTA, borderWidth=0.8, borderPadding=(8, 9, 8, 9),
@@ -69,15 +73,32 @@ class _LienzoNumerado(Canvas):
         kwargs["initialFontName"] = REGULAR   # sin esto cada página declara Helvetica sin usarla
         super().__init__(*args, **kwargs)
         self._estados: list[dict] = []
+        self._marcas: list[tuple] = []   # marcadores y entradas del panel lateral, con la página en que se pidieron
 
     def showPage(self):
         self._estados.append(dict(self.__dict__))
         self._startPage()
 
+    # Las páginas se cierran todas al final (para saber el total), y un marcador pedido antes apuntaría siempre a la primera:
+    # se anotan con su página y se registran en `save`, cuando cada página ya es la vigente.
+    def bookmarkPage(self, key, *args, **kwargs):
+        self._marcas.append((len(self._estados), "marcador", key, args, kwargs))
+
+    def addOutlineEntry(self, title, key, level=0, closed=None):
+        self._marcas.append((len(self._estados), "entrada", (title, key, level, closed), (), {}))
+
     def save(self):
         total = len(self._estados)
-        for estado in self._estados:
+        for pagina, estado in enumerate(self._estados):
             self.__dict__.update(estado)
+            for donde, tipo, dato, args, kwargs in self._marcas:
+                if donde != pagina:
+                    continue
+                if tipo == "marcador":
+                    super().bookmarkPage(dato, *args, **kwargs)
+                else:
+                    titulo, clave, nivel, cerrado = dato
+                    super().addOutlineEntry(titulo, clave, nivel, cerrado)
             self._decorar(total)
             super().showPage()
         super().save()
@@ -124,6 +145,30 @@ class _LienzoNumerado(Canvas):
         self.drawString(x_ia + 4, y, "IA")
 
 
+class _Encabezado(Paragraph):
+    """Título que entra al índice: lleva su nivel y una clave fija para la liga interna y el marcador del visor de PDF."""
+
+    def __init__(self, texto: str, estilo, nivel: int, clave: str, indexar: bool = True):
+        super().__init__(texto, estilo)
+        self.marcado, self.nivel, self.clave, self.indexar = texto, nivel, clave, indexar   # `texto` ya viene escapado
+
+
+class _Documento(SimpleDocTemplate):
+    """Plantilla que, por cada título, deja un marcador en el panel lateral del visor y una entrada (con liga) en el índice."""
+
+    def beforeDocument(self):
+        self._registrados = set()
+
+    def afterFlowable(self, flowable):
+        for f in [flowable, *getattr(flowable, "_content", [])]:   # los títulos que van dentro de un KeepTogether también cuentan
+            if isinstance(f, _Encabezado) and f.indexar and f.clave not in self._registrados:
+                self._registrados.add(f.clave)
+                titulo = f.getPlainText()
+                self.canv.bookmarkPage(f.clave)
+                self.canv.addOutlineEntry(titulo, f.clave, f.nivel, closed=0)
+                self.notify("TOCEntry", (f.nivel, f.marcado, self.page, f.clave))   # el índice vuelve a leer marcado: va escapado
+
+
 def _vinetas(historia: list, estilos: dict, items, vacio: str | None = None) -> None:
     items = lista(items)
     for item in items:
@@ -138,12 +183,23 @@ def generar_pdf(reporte: dict) -> bytes:
     e = _estilos()
     h: list = []
 
+    claves = iter(f"seccion{n}" for n in range(1, 100))
+
     def seccion(titulo: str) -> None:
-        h.append(Paragraph(_t(titulo), e["h1"]))
+        h.append(_Encabezado(_t(titulo), e["h1"], 0, next(claves)))
         h.append(HRFlowable(width="100%", thickness=0.6, color=LAVANDA, spaceAfter=5))
+
+    def subtitulo(titulo: str, indexar: bool = True) -> _Encabezado:
+        return _Encabezado(_t(titulo), e["h2"], 1, next(claves), indexar)
 
     h.append(Paragraph("Reporte de apoyo al psicodiagnóstico", e["titulo"]))
     h.append(Paragraph("Hipótesis de apoyo según la CIE-11", e["sub"]))
+    estilo_tabla = TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("RIGHTPADDING", (0, 0), (-1, -1), 0), ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                              ("FONTNAME", (0, 0), (-1, -1), REGULAR)])   # sin FONTNAME usaría Helvetica
+    indice = TableOfContents(dotsMinLevel=0, levelStyles=[e["indice1"], e["indice2"]], tableStyle=estilo_tabla)
+    h.append(Paragraph("Índice", e["indice_titulo"]))
+    h.append(indice)
+    h.append(PageBreak())
 
     seccion("1. Datos del caso")
     for rotulo, valor in comun.datos_del_caso(reporte):
@@ -152,14 +208,14 @@ def generar_pdf(reporte: dict) -> bytes:
     seccion("2. Síntomas por categoría")
     sintomas = dicc(reporte.get("sintomas"))
     for etiqueta, clave in comun.ETIQUETAS_SINTOMAS:
-        h.append(Paragraph(_t(etiqueta), e["h2"]))
+        h.append(subtitulo(etiqueta, indexar=False))   # las cuatro categorías de síntomas no van al índice
         _vinetas(h, e, sintomas.get(clave), "Ninguno identificado")
 
     seccion("3. Hipótesis diagnósticas (de la más a la menos plausible)")
     hipotesis = lista_de_dicts(reporte.get("hipotesis"))
     for i, hip in enumerate(hipotesis, 1):
         bloque = [
-            Paragraph(f"{i}. {_t(mayuscula_inicial(hip.get('titulo')) or 'Sin título')} — {_t(hip.get('codigo') or 'sin código')}", e["h2"]),
+            subtitulo(f"{i}. {mayuscula_inicial(hip.get('titulo')) or 'Sin título'} — {hip.get('codigo') or 'sin código'}"),
             Paragraph(_liga(hip.get("url"), "Abrir en el navegador OMS"), e["cuerpo"]),
         ]
         h.append(KeepTogether(bloque))
@@ -171,14 +227,14 @@ def generar_pdf(reporte: dict) -> bytes:
     if not hipotesis:
         h.append(Paragraph("Sin hipótesis diagnósticas.", e["cuerpo"]))
     if lista(reporte.get("ambiguedades")):
-        h.append(Paragraph("Ambigüedades", e["h2"]))
+        h.append(subtitulo("Ambigüedades"))
         _vinetas(h, e, reporte.get("ambiguedades"))
 
     seccion("4. Diferenciales y exclusiones")
     _vinetas(h, e, reporte.get("diferenciales"), NINGUNO)
     alternativas = lista_de_dicts(reporte.get("alternativas"))
     if alternativas:
-        h.append(Paragraph("Alternativas consultadas y descartadas", e["h2"]))
+        h.append(subtitulo("Alternativas consultadas y descartadas"))
         for a in alternativas:
             h.append(Paragraph(f"{_t(mayuscula_inicial(a.get('titulo')) or 'Sin título')} ({_t(a.get('codigo') or 'sin código')}) — "
                                f"{_liga(a.get('url'), 'OMS')}", e["vineta"], bulletText="•"))
@@ -207,7 +263,7 @@ def generar_pdf(reporte: dict) -> bytes:
         h.append(Paragraph("Ninguna sugerida", e["vineta"], bulletText="•"))
 
     if guias:
-        h.append(Paragraph("Guías clínicas consultadas", e["h2"]))
+        h.append(subtitulo("Guías clínicas consultadas"))
         h.append(Paragraph("Referencias para consulta del profesional; el sistema no recomienda tratamientos.", e["nota"]))
 
         def grupo_de(g: dict) -> str:
@@ -218,13 +274,20 @@ def generar_pdf(reporte: dict) -> bytes:
                 cita = f" — «{_t(g.get('cita'))}»" if texto(g.get("cita")) else ""
                 h.append(Paragraph(_liga(g.get("url"), texto(g.get("titulo")) or "Guía") + cita, e["vineta"], bulletText="•"))
 
-    seccion("7. Aviso")
+    numero = 7
+    conclusion = texto(reporte.get("conclusion"))
+    if conclusion:
+        seccion(f"{numero}. Conclusión, recomendaciones y siguientes pasos")
+        h.append(Paragraph(_t(conclusion), e["cuerpo"]))
+        numero += 1
+
+    seccion(f"{numero}. Aviso")
     h.append(Paragraph(_t(reporte.get("aviso")) or "&nbsp;", e["aviso"]))
 
     salida = io.BytesIO()
-    documento = SimpleDocTemplate(
+    documento = _Documento(
         salida, pagesize=A4, leftMargin=2 * cm, rightMargin=2 * cm, topMargin=2.5 * cm, bottomMargin=2.2 * cm,
         title="Reporte de apoyo al psicodiagnóstico", author="Ψ-DIAG con IA".replace("Ψ", "Psi"), creator="Ψ-DIAG con IA".replace("Ψ", "Psi"),
     )
-    documento.build(h, canvasmaker=_LienzoNumerado)
+    documento.multiBuild(h, canvasmaker=_LienzoNumerado)   # varias pasadas: el índice necesita saber en qué página cae cada título
     return salida.getvalue()

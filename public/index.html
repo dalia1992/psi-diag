@@ -61,9 +61,10 @@
           </label>
         </div>
         <div class="campo">
-          <label for="archivo-caso">Foto (JPG o PNG) o PDF de hasta 10 páginas</label>
-          <input id="archivo-caso" type="file" accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf" aria-describedby="nota-archivo">
-          <p id="nota-archivo" class="apoyo">Hasta 4 MB. Las fotos se reducen en tu dispositivo antes de enviarse.</p>
+          <label for="archivo-caso">Hasta 10 fotos (JPG o PNG) o un PDF de hasta 10 páginas</label>
+          <input id="archivo-caso" type="file" multiple accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf" aria-describedby="nota-archivo">
+          <p id="nota-archivo" class="apoyo">Si tus notas están en varias hojas, sube una foto por hoja: se leen en el orden en que las elijas. Hasta 4 MB en total; las fotos se reducen en tu dispositivo antes de enviarse. No mezcles un PDF con fotos.</p>
+          <ul id="lista-archivos" class="lista-archivos" hidden></ul>
         </div>
       </div>
 

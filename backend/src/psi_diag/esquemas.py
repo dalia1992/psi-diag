@@ -69,3 +69,11 @@ class ReporteClinico(BaseModel):
         examples=[["duración exacta de los síntomas", "antecedentes personales"]],
     )
     pruebas: list[PruebaSugerida] = Field(default_factory=list, description="Lista de objetos {nombre, motivo}. Pruebas complementarias: solo nombre y motivo")
+    conclusion: str = Field(
+        default="",
+        description=(
+            "Un párrafo (4 a 7 frases) para el profesional: qué sugiere el cuadro en conjunto, recomendaciones para la "
+            "evaluación y siguientes pasos (información por recabar, pruebas a aplicar, diferenciales a descartar). "
+            "Sin tratamiento ni dosis y sin afirmar un diagnóstico."
+        ),
+    )
