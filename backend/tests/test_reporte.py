@@ -241,3 +241,25 @@ def test_pruebas_sin_guia_quedan_con_guia_none():
     d = construir_datos(SINTOMAS, finales, rep, [], date(2026, 10, 15), None, None)
     assert d["pruebas"] == [{"nombre": "Inventario de Depresión de Beck", "motivo": "Cuantificar severidad", "guia": None, "cita": ""}]
     assert d["guias"] == []
+
+
+def test_construir_datos_pone_mayuscula_inicial_en_todos_los_items():
+    from psi_diag.reporte import construir_datos
+
+    rep = reporte_base(
+        hipotesis=[HipotesisRedactada(codigo="6A70", justificacion="tristeza persistente.", criterios_cumplidos=["ánimo bajo"], criterios_no_cumplidos=["duración no confirmada"])],
+        ambiguedades=["podría ser recurrente"], diferenciales=["descartar trastorno bipolar"], datos_faltantes=["antecedentes previos"],
+        pruebas=[PruebaSugerida(nombre="inventario de Beck", motivo="cuantificar severidad")],
+    )
+    finales, _ = validar_hipotesis(rep, [{**CANDIDATOS[0], "titulo": "trastorno depresivo"}])
+    alternativas = [{"codigo": "6A71", "titulo": "trastorno depresivo recurrente", "url": "https://icd.who.int/x"}]
+    d = construir_datos(SINTOMAS, finales, rep, alternativas, date(2026, 10, 15), None, validar_pruebas(rep.pruebas, [])[0])
+    assert d["sintomas"]["cognitivos"] == ["Dificultad para concentrarse"]
+    assert d["sintomas"]["emocionales"] == ["Tristeza"] and d["sintomas"]["afectacion_social"] == ["Faltas al trabajo"]
+    h = d["hipotesis"][0]
+    assert h["titulo"] == "Trastorno depresivo" and h["justificacion"] == "Tristeza persistente."
+    assert h["criterios_cumplidos"] == ["Ánimo bajo"] and h["criterios_no_cumplidos"] == ["Duración no confirmada"]
+    assert d["ambiguedades"] == ["Podría ser recurrente"] and d["diferenciales"] == ["Descartar trastorno bipolar"]
+    assert d["datos_faltantes"] == ["Antecedentes previos"]
+    assert d["alternativas"][0]["titulo"] == "Trastorno depresivo recurrente"
+    assert d["pruebas"][0]["nombre"] == "Inventario de Beck" and d["pruebas"][0]["motivo"] == "Cuantificar severidad"

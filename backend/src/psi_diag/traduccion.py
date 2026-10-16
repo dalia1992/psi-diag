@@ -2,7 +2,7 @@
 import re
 from dataclasses import dataclass
 
-from .reporte import ETIQUETAS_GUIAS
+from .reporte import ETIQUETAS_GUIAS, mayuscula_inicial
 
 
 @dataclass(frozen=True)
@@ -98,17 +98,22 @@ def _verificacion(datos: dict) -> dict:
     }
 
 
+def _linea_con_negrita(negrita: str, texto: str) -> dict:
+    """Línea del detalle con una parte en negrita (la pantalla la dibuja con <strong>, nunca como HTML)."""
+    return {"negrita": negrita, "texto": texto}
+
+
 def _sintomas(datos: dict) -> dict:
     sintomas = datos.get("sintomas") or {}
     lineas = []
     for clave, etiqueta in _CATEGORIAS_SINTOMAS:
         items = sintomas.get(clave) or []
         if items:
-            lineas.append(f"{etiqueta}: {'; '.join(items)}")
+            lineas.append(_linea_con_negrita(f"{etiqueta}:", "; ".join(mayuscula_inicial(i) for i in items)))
     if sintomas.get("temporalidad"):
-        lineas.append(f"Duración: {sintomas['temporalidad']}")
+        lineas.append(_linea_con_negrita("Duración:", sintomas["temporalidad"]))
     if sintomas.get("datos_faltantes"):
-        lineas.append(f"Por recabar: {'; '.join(sintomas['datos_faltantes'])}")
+        lineas.append(_linea_con_negrita("Por recabar:", "; ".join(mayuscula_inicial(i) for i in sintomas["datos_faltantes"])))
     total = sum(len(sintomas.get(clave) or []) for clave, _ in _CATEGORIAS_SINTOMAS)
     return {"resumen": f"Síntomas identificados: {total}", "lineas": lineas}
 
@@ -116,7 +121,7 @@ def _sintomas(datos: dict) -> dict:
 def _cie11(datos: dict) -> dict:
     candidatos = datos.get("candidatos") or []
     alternativas = datos.get("alternativas") or []
-    lineas = [f"{c['codigo']} · {c['titulo']}" for c in candidatos]
+    lineas = [_linea_con_negrita(c["codigo"], f"· {mayuscula_inicial(c['titulo'])}") for c in candidatos]
     if alternativas:
         lineas.append(f"Otros códigos relacionados: {len(alternativas)}")
     for herramienta in dict.fromkeys(t["herramienta"] for t in datos.get("traza_tools") or []):

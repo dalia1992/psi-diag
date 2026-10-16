@@ -67,9 +67,22 @@
   "detalle": {
    "resumen": "Síntomas identificados: 2",
    "lineas": [
-    "Emocionales: tristeza",
-    "Afectación social: faltas al trabajo",
-    "Por recabar: Duración de los síntomas"
+    {
+     "negrita": "Emocionales:",
+     "texto": "Tristeza casi todos los días; Sentimientos de culpa"
+    },
+    {
+     "negrita": "Cognitivos:",
+     "texto": "Dificultad para concentrarse"
+    },
+    {
+     "negrita": "Conductuales:",
+     "texto": "Insomnio de conciliación"
+    },
+    {
+     "negrita": "Por recabar:",
+     "texto": "Severidad de los síntomas; Antecedentes familiares"
+    }
    ]
   }
  },
@@ -87,7 +100,10 @@
   "detalle": {
    "resumen": "Diagnósticos candidatos en la CIE-11: 1",
    "lineas": [
-    "6A70 · Trastorno depresivo de episodio único",
+    {
+     "negrita": "6A70",
+     "texto": "· Trastorno depresivo de episodio único"
+    },
     "Otros códigos relacionados: 1",
     "Obteniendo el código CIE-11",
     "Revisando los criterios clínicos"

@@ -59,9 +59,27 @@ function vaciar(nodo) {
   while (nodo.firstChild) nodo.removeChild(nodo.firstChild);
 }
 
+// Una línea del detalle es texto o {negrita, texto}: la parte en negrita se dibuja con <strong>, siempre como texto.
+function normalizarLinea(linea) {
+  if (linea && typeof linea === "object" && !Array.isArray(linea)) {
+    return { negrita: String(linea.negrita ?? ""), texto: String(linea.texto ?? "") };
+  }
+  return String(linea);
+}
+
 function listaDe(elementos, clase) {
   const ul = el("ul", clase);
-  for (const e of elementos) ul.appendChild(el("li", "", e));
+  for (const e of elementos) {
+    const linea = normalizarLinea(e);
+    const li = el("li");
+    if (typeof linea === "string") {
+      li.textContent = linea;
+    } else {
+      li.appendChild(el("strong", "", linea.negrita));
+      li.appendChild(document.createTextNode(linea.texto ? ` ${linea.texto}` : ""));
+    }
+    ul.appendChild(li);
+  }
   return ul;
 }
 
@@ -289,7 +307,7 @@ function aplicarPaso(ev) {
     if (ev.id === "lectura") $("aviso-ocr-avance").hidden = true;
     if (ev.detalle && !fila.li.querySelector("details")) {
       fila.li.appendChild(detallesDelPaso(ev.detalle));
-      estado.pasos.push({ titulo: nombre, resumen: ev.detalle.resumen || "", lineas: Array.isArray(ev.detalle.lineas) ? ev.detalle.lineas.map(String) : [] });
+      estado.pasos.push({ titulo: nombre, resumen: ev.detalle.resumen || "", lineas: Array.isArray(ev.detalle.lineas) ? ev.detalle.lineas.map(normalizarLinea) : [] });
     }
   }
 }

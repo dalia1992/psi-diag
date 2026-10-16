@@ -82,6 +82,14 @@ def _mayuscula_inicial(texto: str) -> str:
     return texto[:1].upper() + texto[1:]
 
 
+mayuscula_inicial = _mayuscula_inicial  # nombre público: lo usan también los detalles de la pantalla
+
+
+def _mayusculas(items) -> list:
+    """Cada ítem de una lista empieza con mayúscula; lo que no sea texto se deja igual."""
+    return [_mayuscula_inicial(i) if isinstance(i, str) else i for i in items or []]
+
+
 NINGUNO_INDICADO = "Ninguno indicado"
 
 
@@ -112,18 +120,23 @@ def construir_datos(
     return {
         "fecha": fecha.isoformat(),
         "caso": {clave: sintomas.get(clave) for clave in ("paciente_ref", "edad", "sexo", "temporalidad")},
-        "sintomas": {clave: list(sintomas.get(clave) or []) for clave in ("cognitivos", "emocionales", "conductuales", "afectacion_social")},
+        "sintomas": {clave: _mayusculas(sintomas.get(clave)) for clave in ("cognitivos", "emocionales", "conductuales", "afectacion_social")},
         "hipotesis": [
-            {clave: h[clave] for clave in ("codigo", "titulo", "url", "justificacion", "criterios_cumplidos", "criterios_no_cumplidos")}
+            {
+                "codigo": h["codigo"], "titulo": _mayuscula_inicial(h["titulo"]), "url": h["url"],
+                "justificacion": _mayuscula_inicial(h["justificacion"]),
+                "criterios_cumplidos": _mayusculas(h["criterios_cumplidos"]),
+                "criterios_no_cumplidos": _mayusculas(h["criterios_no_cumplidos"]),
+            }
             for h in hipotesis
         ],
-        "ambiguedades": list(reporte.ambiguedades),
-        "diferenciales": list(reporte.diferenciales),
-        "alternativas": [{clave: a[clave] for clave in ("codigo", "titulo", "url")} for a in alternativas],
-        "datos_faltantes": list(reporte.datos_faltantes),
+        "ambiguedades": _mayusculas(reporte.ambiguedades),
+        "diferenciales": _mayusculas(reporte.diferenciales),
+        "alternativas": [{"codigo": a["codigo"], "titulo": _mayuscula_inicial(a["titulo"]), "url": a["url"]} for a in alternativas],
+        "datos_faltantes": _mayusculas(reporte.datos_faltantes),
         "pruebas": [
             {
-                "nombre": p["nombre"], "motivo": p["motivo"],
+                "nombre": _mayuscula_inicial(p["nombre"]), "motivo": _mayuscula_inicial(p["motivo"]),
                 "guia": {"titulo": p["guia"]["titulo"], "url": p["guia"]["url"]} if p["guia"] else None,
                 "cita": p["cita"],
             }

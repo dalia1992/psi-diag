@@ -65,7 +65,8 @@ def _datos_por_paso():
 
 
 def _textos(resultado):
-    return [resultado["resumen"], *resultado["lineas"]]
+    planas = [l if isinstance(l, str) else f"{l['negrita']} {l['texto']}" for l in resultado["lineas"]]
+    return [resultado["resumen"], *planas]
 
 
 def test_ninguna_frase_expone_nombres_tecnicos():
@@ -147,3 +148,21 @@ def test_proteccion_sin_marcadores_muestra_el_texto_para_que_se_revise():
     resultado = detalle_legible("proteccion", {"texto_anon": "Se siente triste desde hace dos meses."})
     assert "No se detectaron datos personales" in resultado["resumen"]
     assert resultado["lineas"] == ["Se siente triste desde hace dos meses."]
+
+
+def test_el_detalle_de_sintomas_pone_mayuscula_inicial_en_cada_item():
+    datos = {"sintomas": {"cognitivos": ["dificultad para concentrarse", "olvidos frecuentes"], "emocionales": ["tristeza"],
+                          "conductuales": [], "afectacion_social": [], "temporalidad": "4 meses",
+                          "datos_faltantes": ["antecedentes familiares", "severidad"]}}
+    lineas = detalle_legible("sintomas", datos)["lineas"]
+    assert {"negrita": "Cognitivos:", "texto": "Dificultad para concentrarse; Olvidos frecuentes"} in lineas
+    assert {"negrita": "Emocionales:", "texto": "Tristeza"} in lineas
+    assert {"negrita": "Duración:", "texto": "4 meses"} in lineas
+    assert {"negrita": "Por recabar:", "texto": "Antecedentes familiares; Severidad"} in lineas
+    assert all(set(l) == {"negrita", "texto"} for l in lineas)
+
+
+def test_el_detalle_de_cie11_marca_el_codigo_en_negrita_y_capitaliza_el_titulo():
+    datos = {"candidatos": [{"codigo": "6A70", "titulo": "trastorno depresivo de episodio único", "url": "https://icd.who.int/x"}]}
+    lineas = detalle_legible("cie11", datos)["lineas"]
+    assert {"negrita": "6A70", "texto": "· Trastorno depresivo de episodio único"} in lineas
