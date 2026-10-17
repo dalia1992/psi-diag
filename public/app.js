@@ -992,6 +992,7 @@ function conectar() {
   $("confirma-ocr").addEventListener("change", actualizarBotonGenerar);
   $("archivo-caso").addEventListener("change", agregarArchivos);
   $("boton-generar").addEventListener("click", enviar);
+  $("boton-volver-inicio").addEventListener("click", () => irA("inicio")); // lo escrito o elegido se conserva al volver a «Nuevo caso»
   $("boton-reintentar").addEventListener("click", enviar);
   $("boton-editar").addEventListener("click", editarCaso);
   $("boton-confirmar").addEventListener("click", confirmarTexto);
