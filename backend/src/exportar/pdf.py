@@ -208,10 +208,16 @@ def generar_pdf(reporte: dict) -> bytes:
     seccion("2. Síntomas por categoría")
     sintomas = dicc(reporte.get("sintomas"))
     for etiqueta, clave in comun.ETIQUETAS_SINTOMAS:
-        h.append(subtitulo(etiqueta, indexar=False))   # las cuatro categorías de síntomas no van al índice
+        h.append(subtitulo(etiqueta, indexar=False))   # las categorías de síntomas no van al índice
         _vinetas(h, e, sintomas.get(clave), "Ninguno identificado")
 
-    seccion("3. Hipótesis diagnósticas (de la más a la menos plausible)")
+    seccion("3. Enfermedades conocidas y medicación")
+    antecedentes = dicc(reporte.get("antecedentes_medicos"))
+    for etiqueta, clave in comun.ETIQUETAS_ANTECEDENTES:
+        h.append(subtitulo(etiqueta, indexar=False))
+        _vinetas(h, e, antecedentes.get(clave), NINGUNO)
+
+    seccion("4. Hipótesis diagnósticas (de la más a la menos plausible)")
     hipotesis = lista_de_dicts(reporte.get("hipotesis"))
     for i, hip in enumerate(hipotesis, 1):
         bloque = [
@@ -230,7 +236,7 @@ def generar_pdf(reporte: dict) -> bytes:
         h.append(subtitulo("Ambigüedades"))
         _vinetas(h, e, reporte.get("ambiguedades"))
 
-    seccion("4. Diferenciales y exclusiones")
+    seccion("5. Diferenciales y exclusiones")
     _vinetas(h, e, reporte.get("diferenciales"), NINGUNO)
     alternativas = lista_de_dicts(reporte.get("alternativas"))
     if alternativas:
@@ -239,10 +245,10 @@ def generar_pdf(reporte: dict) -> bytes:
             h.append(Paragraph(f"{_t(mayuscula_inicial(a.get('titulo')) or 'Sin título')} ({_t(a.get('codigo') or 'sin código')}) — "
                                f"{_liga(a.get('url'), 'OMS')}", e["vineta"], bulletText="•"))
 
-    seccion("5. Datos faltantes por recabar")
+    seccion("6. Datos faltantes por recabar")
     _vinetas(h, e, reporte.get("datos_faltantes"), NINGUNO)
 
-    seccion("6. Pruebas complementarias sugeridas")
+    seccion("7. Pruebas complementarias sugeridas")
     h.append(Paragraph("Sugerencias a validar por el profesional. Solo se indica el nombre de la prueba: "
                        "no se incluyen cuestionarios ni formas de calificación.", e["nota"]))
     guias = lista_de_dicts(reporte.get("guias"))
@@ -274,7 +280,7 @@ def generar_pdf(reporte: dict) -> bytes:
                 cita = f" — «{_t(g.get('cita'))}»" if texto(g.get("cita")) else ""
                 h.append(Paragraph(_liga(g.get("url"), texto(g.get("titulo")) or "Guía") + cita, e["vineta"], bulletText="•"))
 
-    numero = 7
+    numero = 8
     conclusion = texto(reporte.get("conclusion"))
     if conclusion:
         seccion(f"{numero}. Conclusión, recomendaciones y siguientes pasos")

@@ -219,8 +219,19 @@
             "tristeza"
           ],
           "conductuales": [],
+          "fisiologicos": [
+            "insomnio de conciliación"
+          ],
           "afectacion_social": [
             "faltas al trabajo"
+          ]
+        },
+        "antecedentes_medicos": {
+          "condiciones_medicas": [
+            "diabetes tipo 2"
+          ],
+          "medicamentos": [
+            "metformina"
           ]
         },
         "hipotesis": [

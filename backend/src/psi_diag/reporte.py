@@ -120,7 +120,8 @@ def construir_datos(
     return {
         "fecha": fecha.isoformat(),
         "caso": {clave: sintomas.get(clave) for clave in ("paciente_ref", "edad", "sexo", "temporalidad")},
-        "sintomas": {clave: _mayusculas(sintomas.get(clave)) for clave in ("cognitivos", "emocionales", "conductuales", "afectacion_social")},
+        "sintomas": {clave: _mayusculas(sintomas.get(clave)) for clave in ("cognitivos", "emocionales", "conductuales", "fisiologicos", "afectacion_social")},
+        "antecedentes_medicos": {clave: _mayusculas(sintomas.get(clave)) for clave in ("condiciones_medicas", "medicamentos")},
         "hipotesis": [
             {
                 "codigo": h["codigo"], "titulo": _mayuscula_inicial(h["titulo"]), "url": h["url"],
@@ -171,11 +172,16 @@ def render_markdown(
         ("Cognitivos", "cognitivos"),
         ("Emocionales", "emocionales"),
         ("Conductuales", "conductuales"),
+        ("Fisiológicos", "fisiologicos"),
         ("Afectación social", "afectacion_social"),
     ):
         partes += [f"### {etiqueta}", _lista(sintomas.get(clave) or [])]
 
-    partes.append("## 3. Hipótesis diagnósticas (de la más a la menos plausible)")
+    partes.append("## 3. Enfermedades conocidas y medicación")
+    for etiqueta, clave in (("Enfermedades o condiciones médicas", "condiciones_medicas"), ("Medicamentos", "medicamentos")):
+        partes += [f"### {etiqueta}", _lista(sintomas.get(clave) or [], NINGUNO_INDICADO)]
+
+    partes.append("## 4. Hipótesis diagnósticas (de la más a la menos plausible)")
     for i, h in enumerate(hipotesis, 1):
         partes += [
             f"### {i}. {_mayuscula_inicial(h['titulo'])} — `{h['codigo']}`",
@@ -189,14 +195,14 @@ def render_markdown(
     if reporte.ambiguedades:
         partes += ["### Ambigüedades", _lista(reporte.ambiguedades)]
 
-    partes += ["## 4. Diferenciales y exclusiones", _lista(reporte.diferenciales, NINGUNO_INDICADO)]
+    partes += ["## 5. Diferenciales y exclusiones", _lista(reporte.diferenciales, NINGUNO_INDICADO)]
     if alternativas:
         partes.append("### Alternativas consultadas y descartadas")
         partes += [f"- {_mayuscula_inicial(a['titulo'])} (`{a['codigo']}`) — [OMS]({a['url']})" for a in alternativas]
 
-    partes += ["## 5. Datos faltantes por recabar", _lista(reporte.datos_faltantes, NINGUNO_INDICADO)]
+    partes += ["## 6. Datos faltantes por recabar", _lista(reporte.datos_faltantes, NINGUNO_INDICADO)]
     partes += [
-        "## 6. Pruebas complementarias sugeridas",
+        "## 7. Pruebas complementarias sugeridas",
         "> Sugerencias a validar por el profesional. Solo se indica el nombre de la prueba: no se incluyen cuestionarios ni formas de calificación.",
     ]
     if pruebas is None:
@@ -209,7 +215,7 @@ def render_markdown(
             if grupo:
                 partes.append(f"**{etiqueta}**")
                 partes.append("\n".join(f"- [{g['titulo']}]({g['url']})" + (f" — «{g['cita']}»" if g.get("cita") else "") for g in grupo))
-    numero = 7
+    numero = 8
     if sin_residuo_json(reporte.conclusion):
         partes += [f"## {numero}. Conclusión, recomendaciones y siguientes pasos", sin_residuo_json(reporte.conclusion)]
         numero += 1

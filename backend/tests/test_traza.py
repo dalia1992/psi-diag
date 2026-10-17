@@ -100,6 +100,8 @@ def test_texto_final_con_bloques():
 def test_sintomas_hay_sintomas():
     assert SintomasPaciente().hay_sintomas() is False
     assert SintomasPaciente(emocionales=["tristeza"]).hay_sintomas() is True
+    assert SintomasPaciente(fisiologicos=["taquicardia"]).hay_sintomas() is True
+    assert SintomasPaciente(condiciones_medicas=["diabetes"], medicamentos=["metformina"]).hay_sintomas() is False   # antecedentes, no síntomas
 
 
 @pytest.mark.skipif(not (FIXTURES / "mms_depresion.json").exists(), reason="falta el fixture del spike (Task 4)")

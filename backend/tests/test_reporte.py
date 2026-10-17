@@ -60,9 +60,9 @@ def test_render_incluye_las_siete_secciones_y_codigo_y_liga():
     rep = reporte_base()
     finales, _ = validar_hipotesis(rep, CANDIDATOS)
     md = render_markdown(SINTOMAS, finales, rep, ALTERNATIVAS, date(2026, 10, 15))
-    for titulo in ("## 1. Datos del caso", "## 2. Síntomas por categoría", "## 3. Hipótesis diagnósticas",
-                   "## 4. Diferenciales y exclusiones", "## 5. Datos faltantes por recabar",
-                   "## 6. Pruebas complementarias sugeridas", "## 7. Aviso"):
+    for titulo in ("## 1. Datos del caso", "## 2. Síntomas por categoría", "## 3. Enfermedades conocidas y medicación",
+                   "## 4. Hipótesis diagnósticas", "## 5. Diferenciales y exclusiones", "## 6. Datos faltantes por recabar",
+                   "## 7. Pruebas complementarias sugeridas", "## 8. Aviso"):
         assert titulo in md
     assert "`6A70`" in md
     assert "[Abrir en el navegador OMS](https://icd.who.int/browse/2024-01/mms/es#1001)" in md
@@ -93,7 +93,7 @@ def test_pruebas_solo_nombre_y_motivo_con_aviso():
     rep = reporte_base()
     finales, _ = validar_hipotesis(rep, CANDIDATOS)
     md = render_markdown(SINTOMAS, finales, rep, [], date(2026, 10, 15))
-    seccion = md.split("## 6. Pruebas complementarias sugeridas")[1].split("## 7.")[0]
+    seccion = md.split("## 7. Pruebas complementarias sugeridas")[1].split("## 8.")[0]
     assert "**Inventario de Depresión de Beck**: Cuantificar severidad" in seccion
     assert "a validar por el profesional" in seccion
 
@@ -130,7 +130,7 @@ def test_el_reporte_agrupa_las_guias_por_fuente_y_tipo():
     md = render_markdown(SINTOMAS, [], reporte_base(), [], date(2026, 10, 15), guias)
     assert "### Guías clínicas consultadas" in md and "el sistema no recomienda tratamientos" in md
     orden = [md.index(x) for x in ("**IMSS (México)", "[GPC IMSS]", "**APA ·", "[Guía de evaluación]", "**OMS**", "[mhGAP]",
-                                   "## 7. Aviso")]
+                                   "## 8. Aviso")]
     assert orden == sorted(orden)  # el IMSS va primero
 
 
@@ -216,10 +216,11 @@ def test_construir_datos_tiene_las_claves_del_contrato():
     finales, _ = validar_hipotesis(rep, CANDIDATOS)
     d = construir_datos(SINTOMAS, finales, rep, ALTERNATIVAS, date(2026, 10, 15), guias, validar_pruebas(rep.pruebas, guias)[0])
     assert set(d) == {"fecha", "caso", "sintomas", "hipotesis", "ambiguedades", "diferenciales", "alternativas",
-                      "datos_faltantes", "pruebas", "guias", "conclusion", "aviso"}
+                      "datos_faltantes", "pruebas", "guias", "conclusion", "aviso", "antecedentes_medicos"}
     assert d["fecha"] == "2026-10-15"
     assert d["caso"] == {"paciente_ref": "[PER_1]", "edad": 34, "sexo": "femenino", "temporalidad": "4 meses"}
-    assert set(d["sintomas"]) == {"cognitivos", "emocionales", "conductuales", "afectacion_social"}
+    assert set(d["sintomas"]) == {"cognitivos", "emocionales", "conductuales", "fisiologicos", "afectacion_social"}
+    assert set(d["antecedentes_medicos"]) == {"condiciones_medicas", "medicamentos"}
     assert d["hipotesis"][0] == {
         "codigo": "6A70", "titulo": CANDIDATOS[0]["titulo"], "url": CANDIDATOS[0]["url"], "justificacion": "Tristeza persistente.",
         "criterios_cumplidos": ["Ánimo bajo"], "criterios_no_cumplidos": ["Duración no confirmada"]}
@@ -273,3 +274,25 @@ def test_la_conclusion_pierde_el_residuo_de_json_que_el_modelo_pega():
     assert sin_residuo_json("Texto normal, con comas y «comillas».") == "Texto normal, con comas y «comillas»."
     r = ReporteClinico(hipotesis=[{"codigo": "6A70", "justificacion": "x"}], conclusion=sucia)
     assert r.conclusion == "Siguientes pasos: aplicar PHQ-9."
+
+
+def test_el_reporte_muestra_fisiologicos_enfermedades_y_medicamentos():
+    sintomas = {**SINTOMAS, "fisiologicos": ["taquicardia", "despierta de madrugada"],
+                "condiciones_medicas": ["diabetes tipo 2"], "medicamentos": ["metformina"]}
+    rep = reporte_base()
+    finales, _ = validar_hipotesis(rep, CANDIDATOS)
+    md = render_markdown(sintomas, finales, rep, [], date(2026, 10, 15))
+    assert "### Fisiológicos\n\n- Taquicardia\n- Despierta de madrugada" in md
+    seccion = md.split("## 3. Enfermedades conocidas y medicación")[1].split("## 4.")[0]
+    assert "- Diabetes tipo 2" in seccion and "- Metformina" in seccion
+    from psi_diag.reporte import construir_datos
+    d = construir_datos(sintomas, finales, rep, [], date(2026, 10, 15), [], [])
+    assert d["sintomas"]["fisiologicos"] == ["Taquicardia", "Despierta de madrugada"]
+    assert d["antecedentes_medicos"] == {"condiciones_medicas": ["Diabetes tipo 2"], "medicamentos": ["Metformina"]}
+
+
+def test_sin_antecedentes_la_seccion_dice_ninguno_indicado():
+    rep = reporte_base()
+    finales, _ = validar_hipotesis(rep, CANDIDATOS)
+    md = render_markdown(SINTOMAS, finales, rep, [], date(2026, 10, 15))
+    assert md.split("## 3. Enfermedades conocidas y medicación")[1].split("## 4.")[0].count("Ninguno indicado") == 2

@@ -22,9 +22,24 @@ class SintomasPaciente(BaseModel):
     cognitivos: list[str] = Field(default_factory=list, description=LISTA + "Síntomas cognitivos (atención, memoria, pensamiento)", examples=[["dificultad para concentrarse"]])
     emocionales: list[str] = Field(default_factory=list, description=LISTA + "Síntomas emocionales o afectivos", examples=[["tristeza casi todos los días", "sentimientos de culpa"]])
     conductuales: list[str] = Field(default_factory=list, description=LISTA + "Cambios conductuales observables", examples=[["insomnio de conciliación"]])
+    fisiologicos: list[str] = Field(
+        default_factory=list,
+        description=LISTA + "Síntomas fisiológicos o somáticos: patrones de sueño, activación autonómica (taquicardia, sudoración, temblor, falta de aire), cambios en el apetito o el peso, energía y fatiga, dolor, síntomas gastrointestinales, cambios hormonales (ciclo menstrual, posparto, menopausia, tiroides)",
+        examples=[["taquicardia y sudoración en situaciones sociales", "pérdida de 5 kg en dos meses", "despierta de madrugada"]],
+    )
     afectacion_social: list[str] = Field(
         default_factory=list, description=LISTA + "Afectación en el trabajo, la familia o las relaciones sociales",
         examples=[["falta al trabajo con frecuencia"]],
+    )
+    condiciones_medicas: list[str] = Field(
+        default_factory=list,
+        description=LISTA + "Enfermedades o condiciones médicas conocidas del paciente (diagnosticadas, no síntomas) y antecedentes médicos o genéticos familiares relevantes; solo las que el texto menciona",
+        examples=[["diabetes tipo 2", "hipotiroidismo", "madre con trastorno bipolar"]],
+    )
+    medicamentos: list[str] = Field(
+        default_factory=list,
+        description=LISTA + "Medicamentos, suplementos o sustancias que el paciente usa, tal como aparecen en el texto (con la dosis solo si el texto la da); no inferir uno a partir de una enfermedad",
+        examples=[["metformina", "levotiroxina 50 mcg"]],
     )
     temporalidad: Optional[str] = Field(
         default=None, description="Duración o evolución de los síntomas si se menciona; si no, null. No inventar"
@@ -36,7 +51,7 @@ class SintomasPaciente(BaseModel):
     )
 
     def hay_sintomas(self) -> bool:
-        return any([self.cognitivos, self.emocionales, self.conductuales, self.afectacion_social])
+        return any([self.cognitivos, self.emocionales, self.conductuales, self.fisiologicos, self.afectacion_social])
 
 
 class HipotesisRedactada(BaseModel):

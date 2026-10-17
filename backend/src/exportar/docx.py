@@ -175,7 +175,13 @@ def generar_docx(reporte: dict) -> bytes:
         encabezado(etiqueta, 3)   # categorías de síntomas: no van al índice
         _vinetas(documento, sintomas.get(clave), "Ninguno identificado")
 
-    encabezado("3. Hipótesis diagnósticas (de la más a la menos plausible)", 1)
+    encabezado("3. Enfermedades conocidas y medicación", 1)
+    antecedentes = dicc(reporte.get("antecedentes_medicos"))
+    for etiqueta, clave in comun.ETIQUETAS_ANTECEDENTES:
+        encabezado(etiqueta, 3)
+        _vinetas(documento, antecedentes.get(clave), NINGUNO)
+
+    encabezado("4. Hipótesis diagnósticas (de la más a la menos plausible)", 1)
     hipotesis = lista_de_dicts(reporte.get("hipotesis"))
     for i, h in enumerate(hipotesis, 1):
         encabezado(f"{i}. {mayuscula_inicial(h.get('titulo')) or 'Sin título'} — {texto(h.get('codigo')) or 'sin código'}", 2)
@@ -191,7 +197,7 @@ def generar_docx(reporte: dict) -> bytes:
         encabezado("Ambigüedades", 2)
         _vinetas(documento, reporte.get("ambiguedades"))
 
-    encabezado("4. Diferenciales y exclusiones", 1)
+    encabezado("5. Diferenciales y exclusiones", 1)
     _vinetas(documento, reporte.get("diferenciales"), NINGUNO)
     alternativas = lista_de_dicts(reporte.get("alternativas"))
     if alternativas:
@@ -200,10 +206,10 @@ def generar_docx(reporte: dict) -> bytes:
             _con_liga(documento, "OMS", a.get("url"), "", "List Bullet",
                       f"{mayuscula_inicial(a.get('titulo')) or 'Sin título'} ({texto(a.get('codigo')) or 'sin código'}) — ")
 
-    encabezado("5. Datos faltantes por recabar", 1)
+    encabezado("6. Datos faltantes por recabar", 1)
     _vinetas(documento, reporte.get("datos_faltantes"), NINGUNO)
 
-    encabezado("6. Pruebas complementarias sugeridas", 1)
+    encabezado("7. Pruebas complementarias sugeridas", 1)
     _nota(documento, "Sugerencias a validar por el profesional. Solo se indica el nombre de la prueba: "
                      "no se incluyen cuestionarios ni formas de calificación.")
     guias = lista_de_dicts(reporte.get("guias"))
@@ -238,7 +244,7 @@ def generar_docx(reporte: dict) -> bytes:
                 cita = texto(g.get("cita"))
                 _con_liga(documento, texto(g.get("titulo")) or "Guía", g.get("url"), f" — «{cita}»" if cita else "", "List Bullet")
 
-    numero = 7
+    numero = 8
     conclusion = texto(reporte.get("conclusion"))
     if conclusion:
         encabezado(f"{numero}. Conclusión, recomendaciones y siguientes pasos", 1)

@@ -40,7 +40,12 @@ _CATEGORIAS_SINTOMAS = (
     ("cognitivos", "Cognitivos"),
     ("emocionales", "Emocionales"),
     ("conductuales", "Conductuales"),
+    ("fisiologicos", "Fisiológicos"),
     ("afectacion_social", "Afectación social"),
+)
+_ANTECEDENTES_MEDICOS = (
+    ("condiciones_medicas", "Enfermedades conocidas"),
+    ("medicamentos", "Medicamentos"),
 )
 
 
@@ -111,6 +116,10 @@ def _sintomas(datos: dict) -> dict:
     sintomas = datos.get("sintomas") or {}
     lineas = []
     for clave, etiqueta in _CATEGORIAS_SINTOMAS:
+        items = sintomas.get(clave) or []
+        if items:
+            lineas.append(_linea_con_negrita(f"{etiqueta}:", "; ".join(mayuscula_inicial(i) for i in items)))
+    for clave, etiqueta in _ANTECEDENTES_MEDICOS:
         items = sintomas.get(clave) or []
         if items:
             lineas.append(_linea_con_negrita(f"{etiqueta}:", "; ".join(mayuscula_inicial(i) for i in items)))

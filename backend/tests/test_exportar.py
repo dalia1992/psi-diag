@@ -351,18 +351,18 @@ def test_pdf_tiene_indice_con_ligas_y_marcadores_en_la_pagina_correcta():
     texto = lector.pages[0].extract_text()
     assert "Índice" in texto and "1. Datos del caso" in texto and "Conclusión, recomendaciones y siguientes pasos" in texto
     panel = dict(titulos_del_panel(lector))
-    assert "1. Datos del caso" in panel and "8. Aviso" in panel
-    assert panel["1. Datos del caso"] >= 2 and panel["8. Aviso"] >= panel["1. Datos del caso"]
-    assert panel["8. Aviso"] == len(lector.pages)   # el aviso cierra el documento
+    assert "1. Datos del caso" in panel and "9. Aviso" in panel
+    assert panel["1. Datos del caso"] >= 2 and panel["9. Aviso"] >= panel["1. Datos del caso"]
+    assert panel["9. Aviso"] == len(lector.pages)   # el aviso cierra el documento
     internas = [a.get_object() for a in lector.pages[0].get("/Annots", []) if "/Dest" in a.get_object()]
-    assert len(internas) >= 8   # una liga por entrada del índice
+    assert len(internas) >= 9   # una liga por entrada del índice
 
 
 def test_pdf_largo_apunta_cada_titulo_a_su_pagina():
     r = reporte_con_conclusion()
     r["datos_faltantes"] = [f"Dato faltante número {i} con texto de relleno suficiente para ocupar espacio" for i in range(150)]
     panel = dict(titulos_del_panel(PdfReader(io.BytesIO(generar_pdf(r)))))
-    assert panel["5. Datos faltantes por recabar"] < panel["6. Pruebas complementarias sugeridas"] <= panel["8. Aviso"]
+    assert panel["6. Datos faltantes por recabar"] < panel["7. Pruebas complementarias sugeridas"] <= panel["9. Aviso"]
 
 
 def test_pdf_con_titulos_hostiles_no_rompe_el_indice():
@@ -373,15 +373,15 @@ def test_la_conclusion_aparece_en_pdf_y_word_antes_del_aviso():
     r = reporte_con_conclusion()
     assert "Resumen del cuadro y siguientes pasos" in texto_pdf(generar_pdf(r))
     palabra = texto_docx(generar_docx(r))
-    assert palabra.index("7. Conclusión, recomendaciones y siguientes pasos") < palabra.index("8. Aviso")
+    assert palabra.index("8. Conclusión, recomendaciones y siguientes pasos") < palabra.index("9. Aviso")
     assert "Resumen del cuadro y siguientes pasos" in palabra
 
 
-def test_sin_conclusion_el_aviso_sigue_siendo_la_seccion_7():
+def test_sin_conclusion_el_aviso_sigue_siendo_la_seccion_8():
     r = reporte_completo()
     r.pop("conclusion", None)
-    assert "7. Aviso" in texto_docx(generar_docx(r))
-    assert "7. Aviso" in texto_pdf(generar_pdf(r))
+    assert "8. Aviso" in texto_docx(generar_docx(r))
+    assert "8. Aviso" in texto_pdf(generar_pdf(r))
 
 
 def test_word_tiene_campo_de_indice_con_ligas_a_los_titulos():
@@ -404,3 +404,19 @@ def test_la_conclusion_en_varios_parrafos_sale_como_parrafos_separados():
     textos = [p.text for p in palabra.paragraphs]
     assert {"Primero.", "Segundo.", "Tercero."} <= set(textos)
     assert "Primero." in texto_pdf(generar_pdf(r))
+
+
+def test_pdf_y_word_incluyen_fisiologicos_y_la_seccion_de_enfermedades_y_medicacion():
+    r = reporte_completo()
+    r["sintomas"] = {**r["sintomas"], "fisiologicos": ["Taquicardia y sudoración"]}
+    r["antecedentes_medicos"] = {"condiciones_medicas": ["Diabetes tipo 2"], "medicamentos": ["Metformina"]}
+    for texto in (texto_docx(generar_docx(r)), texto_pdf(generar_pdf(r))):
+        assert "Fisiológicos" in texto and "Taquicardia y sudoración" in texto
+        assert "3. Enfermedades conocidas y medicación" in texto and "Diabetes tipo 2" in texto and "Metformina" in texto
+
+
+def test_un_reporte_sin_antecedentes_medicos_sigue_exportando():
+    r = reporte_completo()
+    r.pop("antecedentes_medicos", None)
+    assert "3. Enfermedades conocidas y medicación" in texto_docx(generar_docx(r))
+    assert generar_pdf(r).startswith(b"%PDF")

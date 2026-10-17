@@ -35,7 +35,12 @@ const CATEGORIAS = [
   ["Cognitivos", "cognitivos"],
   ["Emocionales", "emocionales"],
   ["Conductuales", "conductuales"],
+  ["Fisiológicos", "fisiologicos"],
   ["Afectación social", "afectacion_social"],
+];
+const ANTECEDENTES = [
+  ["Enfermedades o condiciones médicas", "condiciones_medicas"],
+  ["Medicamentos", "medicamentos"],
 ];
 
 // ----------------------------------------------------------------------------- estado (solo memoria)
@@ -744,6 +749,20 @@ function dibujarReporte(reporte, advertencias) {
   }
   if (!hubo) sSint.appendChild(el("p", "nota-suave", "No se identificaron síntomas."));
   cuerpo.appendChild(sSint);
+
+  // Enfermedades conocidas y medicación
+  const antecedentes = reporte.antecedentes_medicos && typeof reporte.antecedentes_medicos === "object" ? reporte.antecedentes_medicos : {};
+  const sMed = seccion("Enfermedades conocidas y medicación");
+  let huboMed = false;
+  for (const [etiqueta, clave] of ANTECEDENTES) {
+    const items = lista(antecedentes[clave]);
+    if (!items.length) continue;
+    huboMed = true;
+    sMed.appendChild(el("h4", "", etiqueta));
+    sMed.appendChild(listaDe(items));
+  }
+  if (!huboMed) sMed.appendChild(el("p", "nota-suave", "No se mencionaron enfermedades conocidas ni medicamentos."));
+  cuerpo.appendChild(sMed);
 
   // Hipótesis
   const sHip = seccion("Hipótesis diagnósticas (CIE-11)");

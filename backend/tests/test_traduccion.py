@@ -173,3 +173,12 @@ def test_lectura_entrega_el_texto_completo_para_poder_editarlo():
     largo = "\n".join(f"Línea {i} del caso" for i in range(100))
     resultado = detalle_legible("lectura", {"texto_ocr": largo})
     assert resultado["texto"] == largo and len(resultado["lineas"]) < 100   # las líneas se recortan, el texto no
+
+
+def test_el_detalle_de_sintomas_incluye_fisiologicos_enfermedades_y_medicamentos():
+    datos = {"sintomas": {"fisiologicos": ["taquicardia"], "condiciones_medicas": ["diabetes tipo 2"], "medicamentos": ["metformina"]}}
+    resultado = detalle_legible("sintomas", datos)
+    assert {"negrita": "Fisiológicos:", "texto": "Taquicardia"} in resultado["lineas"]
+    assert {"negrita": "Enfermedades conocidas:", "texto": "Diabetes tipo 2"} in resultado["lineas"]
+    assert {"negrita": "Medicamentos:", "texto": "Metformina"} in resultado["lineas"]
+    assert resultado["resumen"] == "Síntomas identificados: 1"

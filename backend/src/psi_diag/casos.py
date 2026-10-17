@@ -36,7 +36,7 @@ CASOS = [
             r["estado_final"] == "ok"
             and r["sintomas"]["edad"] is None
             and len(r["sintomas"]["datos_faltantes"]) > 0
-            and "## 5. Datos faltantes por recabar" in r["reporte_md"]
+            and "## 6. Datos faltantes por recabar" in r["reporte_md"]
         ),
     },
     {

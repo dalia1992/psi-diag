@@ -7,7 +7,10 @@ PIE = "Herramienta de apoyo; no sustituye el criterio clínico"
 AZUL, LAVANDA, MENTA, FONDO = "#2F4B7C", "#8E85C2", "#5BB5A2", "#F7F6FC"
 ETIQUETAS_SINTOMAS = (
     ("Cognitivos", "cognitivos"), ("Emocionales", "emocionales"),
-    ("Conductuales", "conductuales"), ("Afectación social", "afectacion_social"),
+    ("Conductuales", "conductuales"), ("Fisiológicos", "fisiologicos"), ("Afectación social", "afectacion_social"),
+)
+ETIQUETAS_ANTECEDENTES = (
+    ("Enfermedades o condiciones médicas", "condiciones_medicas"), ("Medicamentos", "medicamentos"),
 )
 _CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\ufffe\uffff\ud800-\udfff]")   # XML 1.0 no admite los de control; los sustitutos UTF-16 sueltos no se pueden codificar
 _URL = re.compile(r"^https?://[^\s\"'<>\\]{1,2000}$", re.IGNORECASE)
