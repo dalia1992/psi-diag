@@ -7,6 +7,7 @@ from psi_diag.errores import FlujoDetenido
 from psi_diag.esquemas import HipotesisRedactada, PruebaSugerida, ReporteClinico
 from psi_diag.reporte import FRASES_ADVERTENCIA
 from psi_diag.grafo import Componentes, ejecutar, ejecutar_eventos
+from psi_diag.guardrail import GuardrailError
 from tests.helpers import mensajes_con_error, mensajes_exitosos, mensajes_sin_resultados
 
 ENTRADA = "Laura Mendoza, mujer de 34 años, vive en Guadalajara. Refiere tristeza y falta al trabajo."
@@ -449,3 +450,21 @@ async def test_proteger_con_ocr_que_falla_termina_con_error_amigable(tmp_path):
     c, _ = construir(ocr=ocr)
     eventos = [e async for e in proteger_eventos(str(foto), c)]
     assert eventos[-1]["tipo"] == "resultado" and "archivo" in eventos[-1]["resultado"]["razon_amigable"]
+
+
+@pytest.mark.parametrize("error, esperado", [
+    (FlujoDetenido("No se pudo conectar al MCP CIE-11 (http://x): boom"), "CIE-11"),
+    (FlujoDetenido("El agente alcanzó el tope de 12 pasos"), "CIE-11"),
+    (FlujoDetenido("La entrada es un archivo (foto o PDF), pero no hay un componente OCR configurado"), "Escribe el texto"),
+    (RuntimeError("Error code: 429 rate limit"), "saturados"),
+    (FlujoDetenido("OpenRouter respondió 503 al buscar guías"), "saturados"),
+    (GuardrailError("La Decisions API respondió 500: x"), "verificar"),
+    (RuntimeError("algo raro"), "No se pudo completar el análisis"),
+])
+def test_razon_amigable_por_causa(error, esperado):
+    from psi_diag.grafo import _razon_amigable_error
+
+    razon = _razon_amigable_error(error, False)
+    assert esperado in razon
+    for tecnico in ("429", "503", "MCP", "icd11", "Decisions", "Exception", "Error"):
+        assert tecnico not in razon

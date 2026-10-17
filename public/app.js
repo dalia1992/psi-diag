@@ -197,17 +197,26 @@ function actualizarContador() {
   else contador.textContent = `${n} de ${MAX_TEXTO} caracteres`;
 }
 
-function puedeGenerar() {
-  if (estado.enCurso) return false;
+/** Motivo por el que «Continuar» no está disponible, o "" si se puede continuar. */
+function motivoNoGenerar() {
+  if (estado.enCurso) return "";
   if (estado.modo === "texto") {
     const n = textoCaso().length;
-    return n >= MIN_TEXTO && n <= MAX_TEXTO;
+    if (n < MIN_TEXTO) return `Escribe al menos ${MIN_TEXTO} caracteres para continuar.`;
+    return n > MAX_TEXTO ? `El texto supera los ${MAX_TEXTO} caracteres.` : "";
   }
-  return $("confirma-ocr").checked && estado.archivos.length > 0 && !estado.procesando;
+  if (estado.procesando) return "Preparando el archivo…";
+  if (estado.archivos.length === 0) return "Elige una foto o un PDF para continuar.";
+  return $("confirma-ocr").checked ? "" : "Marca la casilla que confirma la lectura del archivo.";
+}
+
+function puedeGenerar() {
+  return !estado.enCurso && motivoNoGenerar() === "";
 }
 
 function actualizarBotonGenerar() {
   $("boton-generar").disabled = !puedeGenerar();
+  $("pista-generar").textContent = motivoNoGenerar();
 }
 
 function elegirModo(modo) {
@@ -515,7 +524,6 @@ function mostrarFalla(mensaje, { reintentable = true, marcarPaso = true } = {}) 
   $("bloque-error").hidden = false;
   $("acciones-cancelar").hidden = true;
   $("aviso-ocr-avance").hidden = true;
-  anunciar(mensaje);
   $("titulo-avance").focus({ preventScroll: true });
 }
 

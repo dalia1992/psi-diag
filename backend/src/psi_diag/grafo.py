@@ -1,5 +1,6 @@
 """Workflow guardrail -> extraer -> búsqueda CIE-11 -> guías clínicas -> reporte, y ejecutar() con anonimización previa."""
 import asyncio
+import re
 import time
 from contextlib import aclosing, contextmanager
 from dataclasses import dataclass
@@ -11,7 +12,7 @@ from typing_extensions import TypedDict
 
 from .errores import FlujoDetenido
 from .esquemas import ReporteClinico, SintomasPaciente
-from .guardrail import pasa_guardrail
+from .guardrail import GuardrailError, pasa_guardrail
 from .ocr import OcrError, es_archivo
 from .pii import MapaPII, anonimizar
 from .progreso import registrar_emisor
@@ -147,12 +148,20 @@ def construir_workflow(c: Componentes, metricas: dict):
 
 RAZON_GENERICA = "No se pudo completar el análisis. Puedes intentarlo de nuevo."
 RAZON_FUERA_DE_ALCANCE = "Este texto no parece ser un caso de psicología clínica. Ψ-DIAG apoya a profesionales de la psicología con notas clínicas de pacientes; revisa lo que escribiste e inténtalo de nuevo."
+RAZON_CIE11 = "No se pudo consultar la CIE-11 en este momento. Espera un minuto e inténtalo de nuevo; si sigue igual, avisa a quien administra la app."
+RAZON_SATURADO = "Los servicios de análisis están saturados. Espera un minuto e inténtalo de nuevo."
+RAZON_VERIFICACION = "No se pudo verificar que el texto sea un caso clínico. Inténtalo de nuevo en un momento."
 _RAZONES_AMIGABLES = (  # (inicio del mensaje de FlujoDetenido, frase para la persona usuaria)
     ("La entrada está vacía", "Escribe o sube la descripción del caso para poder analizarlo."),
     ("No se identificaron síntomas", "No se identificaron síntomas en el texto; describe con más detalle lo que presenta la persona."),
     ("Ninguna hipótesis", "No se encontraron diagnósticos de la CIE-11 para este caso. Puedes intentarlo de nuevo."),
     ("El reporte no contiene hipótesis", "No se pudo redactar un reporte con diagnósticos confiables. Puedes intentarlo de nuevo."),
+    ("La entrada es un archivo", "La lectura de archivos no está disponible por ahora. Escribe el texto del caso directamente."),
+    ("No se pudo conectar al MCP", RAZON_CIE11),
+    ("El MCP no expone", RAZON_CIE11),
+    ("El agente alcanzó el tope", RAZON_CIE11),
 )
+_SATURACION = re.compile(r"\b(429|503)\b")
 _NODO_A_PASO = {"guardrail": "verificacion", "extraer": "sintomas", "busqueda_cie11": "cie11", "guias": "guias", "reporte": "reporte"}
 _PASO_SIGUIENTE = {"verificacion": "sintomas", "sintomas": "cie11", "cie11": "guias", "guias": "reporte"}
 _TITULOS = {p.id: p.titulo for p in PASOS}
@@ -167,6 +176,10 @@ def _razon_amigable_error(error: Exception, en_lectura: bool) -> str:
         for inicio, frase in _RAZONES_AMIGABLES:
             if mensaje.startswith(inicio):
                 return frase
+    if _SATURACION.search(str(error)) or getattr(error, "status_code", None) in (429, 503):
+        return RAZON_SATURADO
+    if isinstance(error, GuardrailError):
+        return RAZON_VERIFICACION
     return RAZON_GENERICA
 
 

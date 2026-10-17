@@ -106,6 +106,7 @@ input[type="file"] { font: inherit; max-width: 100%; }
 .casilla input { width: 22px; height: 22px; margin-top: 3px; accent-color: var(--azul); flex: none; }
 
 .mensaje { color: var(--error); font-weight: 600; margin: .75rem 0; }
+.pista { color: var(--apoyo); font-size: .9rem; margin: .5rem 0 0; min-height: 1.2em; }
 .mensaje-bloque { border-left: 4px solid var(--error); padding-left: 12px; }
 .mensaje-bloque p { margin-bottom: .5rem; }
 
