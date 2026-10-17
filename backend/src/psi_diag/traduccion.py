@@ -29,6 +29,7 @@ ETIQUETAS_HERRAMIENTAS = {
     "icd11_buscar_sintomas_y_signos": "Buscando por síntomas y signos en la CIE-11",
 }
 FRASE_GENERICA = "Consultando la CIE-11…"
+MAX_TEXTO_CASO = 8000  # el mismo tope del campo de texto del caso
 MAX_LINEAS_LECTURA = 40
 MAX_CARACTERES_LECTURA = 4000
 TEXTO_RECORTADO = "… (texto recortado)"
@@ -70,7 +71,9 @@ def _recortar(texto: str) -> list:
 
 def _lectura(datos: dict) -> dict:
     """Muestra el texto leído del archivo para que la persona revise el OCR; se recorta si es muy largo."""
-    return {"resumen": "Texto leído del archivo (revisa que sea correcto)", "lineas": _recortar(datos.get("texto_ocr"))}
+    texto = (datos.get("texto_ocr") or "").strip()
+    # `texto` completo (hasta el máximo que admite el campo del caso): la pantalla lo usa para «Editar el texto leído» si luego algo falla.
+    return {"resumen": "Texto leído del archivo (revisa que sea correcto)", "lineas": _recortar(texto), "texto": texto[:MAX_TEXTO_CASO]}
 
 
 def _proteccion(datos: dict) -> dict:

@@ -50,6 +50,7 @@ const estado = {
   controlador: null,
   enCurso: false,
   procesando: false, // se están reduciendo las fotos elegidas
+  textoOcr: "", // texto que se leyó del archivo en este intento, para poder corregirlo a mano si luego algo falla
 };
 const filas = new Map(); // id de paso -> {li, avance, vivo, claves}
 
@@ -214,6 +215,7 @@ function elegirModo(modo) {
   $("panel-texto").hidden = modo !== "texto";
   $("panel-archivo").hidden = modo !== "archivo";
   mostrarMensaje($("mensaje-nuevo"), "");
+  $("nota-texto-leido").hidden = true;
   if (modo === "archivo") {
     // La aclaración se muestra cada vez que se elige subir archivo: no se recuerda la aceptación.
     $("confirma-ocr").checked = false;
@@ -427,7 +429,10 @@ function aplicarPaso(ev) {
   } else if (ev.estado === "listo") {
     fila.li.classList.add("listo");
     anunciar(`Listo: ${nombre}`);
-    if (ev.id === "lectura") $("aviso-ocr-avance").hidden = true;
+    if (ev.id === "lectura") {
+      $("aviso-ocr-avance").hidden = true;
+      if (ev.detalle && typeof ev.detalle.texto === "string") estado.textoOcr = ev.detalle.texto;
+    }
     if (ev.detalle && !fila.li.querySelector("details")) {
       // Lo que se fue mostrando en vivo (consultas a la CIE-11, hallazgos por fuente) pasa a «Ver qué encontró», antes del resumen final.
       const vivas = [...fila.claves.values(), ...(fila.sueltas || [])].map((x) => x.linea);
@@ -514,6 +519,7 @@ function mostrarFalla(mensaje, { reintentable = true, marcarPaso = true } = {}) 
 
 function prepararAvance() {
   estado.pasos = [];
+  estado.textoOcr = "";
   $("titulo-avance").textContent = "Analizando el caso…";
   $("bloque-error").hidden = true;
   $("acciones-cancelar").hidden = false;
@@ -894,10 +900,20 @@ function nuevoCaso() {
   irA("nuevo");
 }
 
+// «Editar el caso»: si ya se había leído un archivo, se vuelve con ese texto en el campo para corregirlo a mano (sin leer el archivo
+// otra vez); «Subir archivo» sigue a un clic para usar otro. Sin texto leído, vuelve a la pantalla tal como estaba.
 function editarCaso() {
+  const leido = estado.textoOcr;
   cancelarEnvio();
+  if (leido) {
+    elegirModo("texto");
+    $("texto-caso").value = leido;
+    actualizarContador();
+    $("nota-texto-leido").hidden = false;
+  }
   irA("nuevo");
   actualizarBotonGenerar();
+  if (leido) $("texto-caso").focus({ preventScroll: true });
 }
 
 // ----------------------------------------------------------------------------- arranque

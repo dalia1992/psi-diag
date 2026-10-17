@@ -167,3 +167,9 @@ def test_el_detalle_de_cie11_marca_el_codigo_en_negrita_y_capitaliza_el_titulo()
     datos = {"candidatos": [{"codigo": "6A70", "titulo": "trastorno depresivo de episodio único", "url": "https://icd.who.int/x"}]}
     lineas = detalle_legible("cie11", datos)["lineas"]
     assert {"negrita": "6A70", "texto": "· Trastorno depresivo de episodio único"} in lineas
+
+
+def test_lectura_entrega_el_texto_completo_para_poder_editarlo():
+    largo = "\n".join(f"Línea {i} del caso" for i in range(100))
+    resultado = detalle_legible("lectura", {"texto_ocr": largo})
+    assert resultado["texto"] == largo and len(resultado["lineas"]) < 100   # las líneas se recortan, el texto no
