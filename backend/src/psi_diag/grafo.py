@@ -297,6 +297,45 @@ async def ejecutar_eventos(entrada: str, c: Componentes) -> AsyncIterator[dict]:
     yield {"tipo": "resultado", "resultado": resultado}
 
 
+async def proteger_eventos(entrada: str, c: Componentes) -> AsyncIterator[dict]:
+    """Primera mitad del flujo, para que la persona confirme antes de que algo llegue a los modelos de análisis: lee el archivo
+    (si lo hay) y oculta los datos personales. Emite los pasos `lectura` y `proteccion` y termina con un evento `confirmar`
+    ({texto_original, texto_protegido}); no consulta ningún modelo de análisis. Ante un fallo termina con un `resultado` de error."""
+    entrada = str(entrada)
+    resultado = {"estado_final": "error", "razon": "", "razon_amigable": ""}
+    if not entrada.strip():
+        resultado["razon"] = "La entrada está vacía"
+        resultado["razon_amigable"] = _razon_amigable_error(FlujoDetenido(resultado["razon"]), False)
+        yield {"tipo": "resultado", "resultado": resultado}
+        return
+    mapa, metricas = MapaPII(), {}
+    en_lectura = False
+    try:
+        texto = entrada
+        if es_archivo(entrada):
+            if c.ocr is None:
+                raise FlujoDetenido("La entrada es un archivo (foto o PDF), pero no hay un componente OCR configurado")
+            en_lectura = True
+            yield _paso("lectura", "en_curso")
+
+            def leer() -> str:
+                with _cronometro(metricas, "ocr"):
+                    return c.ocr(entrada.strip())
+
+            texto = await asyncio.to_thread(leer)
+            en_lectura = False
+            yield _paso("lectura", "listo", {"texto_ocr": texto})
+
+        yield _paso("proteccion", "en_curso")
+        protegido = await asyncio.to_thread(lambda: anonimizar(texto, c.ner, mapa))
+        yield _paso("proteccion", "listo", {"texto_anon": protegido})
+        yield {"tipo": "confirmar", "texto_original": texto, "texto_protegido": protegido}
+    except Exception as e:
+        resultado["razon"] = str(e) if isinstance(e, FlujoDetenido) else f"Falla inesperada ({type(e).__name__}): {e}"
+        resultado["razon_amigable"] = _razon_amigable_error(e, en_lectura)
+        yield {"tipo": "resultado", "resultado": resultado}
+
+
 async def ejecutar(entrada: str, c: Componentes) -> dict:
     """Si la entrada es la ruta de una foto o un PDF la lee con OCR; anonimiza (fuera del grafo, para que el original no quede en las trazas),
     corre el grafo y reinserta los nombres. `texto_ocr` devuelve el texto leído para que se revise."""

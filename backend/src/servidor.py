@@ -31,6 +31,7 @@ from psi_diag.errores import FlujoDetenido
 BACKEND = "langchain"
 MAX_POR_MINUTO = int(os.getenv("MAX_POR_MINUTO", "8"))   # consultas por minuto y por visitante
 MIN_TEXTO, MAX_TEXTO = 20, 8000
+MAX_TEXTO_LEIDO = 40_000   # el texto que salió del OCR de un archivo (hasta 10 páginas) y ya confirmó la persona
 MAX_BYTES_ARCHIVO = 4_000_000
 MAX_BYTES_TOTAL = 4_200_000   # suma de todos los archivos de una solicitud: Vercel rechaza cuerpos de más de 4.5 MB
 MAX_ARCHIVOS = 10             # hasta 10 imágenes (notas en varias hojas) o un solo PDF
@@ -239,9 +240,10 @@ async def _entrada_de(formulario) -> tuple[str, str | None, bytes | None, str]:
         return "archivo", None, unido, ".pdf"
     if not tiene_texto:
         raise ErrorApi("validacion", "Escribe el caso o sube un archivo.", 400, "falta texto o archivo")
-    limpio = limpiar_texto(texto, MAX_TEXTO + 1)
-    if not MIN_TEXTO <= len(limpio) <= MAX_TEXTO:
-        raise ErrorApi("validacion", f"El texto debe tener entre {MIN_TEXTO} y {MAX_TEXTO} caracteres.", 400, f"{len(limpio)} caracteres")
+    maximo = MAX_TEXTO_LEIDO if str(formulario.get("leido", "")).strip().lower() == "true" else MAX_TEXTO
+    limpio = limpiar_texto(texto, maximo + 1)
+    if not MIN_TEXTO <= len(limpio) <= maximo:
+        raise ErrorApi("validacion", f"El texto debe tener entre {MIN_TEXTO} y {maximo} caracteres.", 400, f"{len(limpio)} caracteres")
     from psi_diag.ocr import es_archivo
     if es_archivo(limpio):  # un texto que parece una ruta haría que el flujo intentara leer un archivo del servidor
         raise ErrorApi("validacion", "Describe el caso con palabras; el texto no puede ser solo un nombre de archivo.", 400, "texto con forma de ruta")
@@ -317,9 +319,12 @@ def _soltar_archivo(ruta: Path | None, activo: threading.Event, fin: threading.E
 
 
 async def transmitir(entrada: str, ruta: Path | None, id_solicitud: str, via: str,
-                     activo: threading.Event | None = None, fin: threading.Event | None = None) -> AsyncIterator[str]:
-    """Genera el stream SSE. El archivo temporal (`ruta`) se borra siempre, incluso si el cliente se desconecta."""
+                     activo: threading.Event | None = None, fin: threading.Event | None = None,
+                     generador=None) -> AsyncIterator[str]:
+    """Genera el stream SSE. El archivo temporal (`ruta`) se borra siempre, incluso si el cliente se desconecta.
+    `generador(entrada, componentes)` produce los eventos: por omisión el flujo completo; `proteger_eventos` es la primera mitad."""
     from psi_diag.grafo import ejecutar_eventos
+    generador = generador or ejecutar_eventos
 
     inicio = time.perf_counter()
     activo, fin = activo or threading.Event(), fin or threading.Event()
@@ -354,7 +359,7 @@ async def transmitir(entrada: str, ruta: Path | None, id_solicitud: str, via: st
                     finally:
                         fin.set()
                 c = dataclasses.replace(c, ocr=ocr_vigilado)
-            flujo = ejecutar_eventos(entrada, c)
+            flujo = generador(entrada, c)
             while True:
                 siguiente = asyncio.ensure_future(flujo.__anext__())
                 while not siguiente.done():
@@ -371,6 +376,8 @@ async def transmitir(entrada: str, ruta: Path | None, id_solicitud: str, via: st
                 if evento.get("tipo") == "resultado":
                     estado = evento["resultado"].get("estado_final", "error")
                     tiempos = pasos_ms(evento["resultado"].get("latencias"))
+                elif evento.get("tipo") == "confirmar":
+                    estado = "confirmar"
                 yield evento_sse(evento_para_cliente(evento))
         except asyncio.TimeoutError:
             error = ErrorApi("timeout", "El análisis tardó demasiado. Puedes intentarlo de nuevo.", 504, f"sin respuesta en {limite:g} s", True)
@@ -405,6 +412,27 @@ async def transmitir_demo(id_solicitud: str, via: str) -> AsyncIterator[str]:
     try:
         for evento in eventos:
             yield evento_sse(evento_para_cliente(evento))
+            if pausa > 0:
+                await asyncio.sleep(pausa)
+    finally:
+        registrar(id=id_solicitud, estado="demo", ms=milisegundos(inicio), via=via)
+
+
+async def transmitir_demo_proteccion(id_solicitud: str, via: str) -> AsyncIterator[str]:
+    """Demo de la primera mitad: los pasos de lectura y protección del caso de demostración y la pantalla de confirmación."""
+    inicio = time.perf_counter()
+    try:
+        pausa = float(os.getenv("DEMO_PAUSA_S", "0.4"))
+    except ValueError:
+        pausa = 0.4
+    eventos = json.loads(FIXTURE_DEMO.read_text(encoding="utf-8"))
+    pasos = [e for e in eventos if e.get("tipo") == "paso" and e.get("id") in ("lectura", "proteccion")]
+    lectura = next((e["detalle"]["lineas"] for e in pasos if e["id"] == "lectura" and e.get("estado") == "listo"), [])
+    protegido = next((e["detalle"]["lineas"] for e in pasos if e["id"] == "proteccion" and e.get("estado") == "listo"), [])
+    cierre = {"tipo": "confirmar", "texto_original": "\n".join(map(str, lectura)), "texto_protegido": "\n".join(map(str, protegido[-1:]))}
+    try:
+        for evento in [*pasos, cierre]:
+            yield evento_sse(evento)
             if pausa > 0:
                 await asyncio.sleep(pausa)
     finally:
@@ -458,8 +486,8 @@ async def acceso(request: Request):
         registrar(id=id_solicitud, estado=estado, ms=milisegundos(inicio), via="acceso")
 
 
-@app.post("/api/caso")
-async def caso(request: Request):
+async def _atender(request: Request, generador=None, demo=None):
+    """Valida la solicitud y responde el stream. `generador` y `demo` eligen qué mitad del flujo corre (por omisión, el flujo completo)."""
     inicio = time.perf_counter()
     id_solicitud = uuid.uuid4().hex[:8]
     via = "desconocida"
@@ -470,7 +498,7 @@ async def caso(request: Request):
         via, texto, datos, extension = await leer_entrada(request)
         cabeceras = {"Cache-Control": "no-store", "X-Accel-Buffering": "no", "X-Content-Type-Options": "nosniff"}
         if modo_demo():
-            return StreamingResponse(transmitir_demo(id_solicitud, via), media_type="text/event-stream", headers=cabeceras)
+            return StreamingResponse((demo or transmitir_demo)(id_solicitud, via), media_type="text/event-stream", headers=cabeceras)
         if componentes_de_prueba is None and not os.getenv("OPENROUTER_API_KEY", "").strip():
             raise ErrorApi("sin_configurar", "Falta la variable de entorno OPENROUTER_API_KEY en Vercel.", 503,
                            "define OPENROUTER_API_KEY y vuelve a desplegar")
@@ -486,7 +514,7 @@ async def caso(request: Request):
         # Respaldo: si el cliente se va antes de que el generador arranque, su `finally` no corre; esto borra el archivo
         # (idempotente, y respeta al hilo del OCR si sigue leyendo).
         respaldo = BackgroundTask(_soltar_archivo, ruta, activo, fin)
-        return StreamingResponse(transmitir(entrada, ruta, id_solicitud, via, activo, fin), media_type="text/event-stream",
+        return StreamingResponse(transmitir(entrada, ruta, id_solicitud, via, activo, fin, *([generador] if generador else [])), media_type="text/event-stream",
                                  headers=cabeceras, background=respaldo)
     except ErrorApi as e:
         if ruta is not None:
@@ -498,6 +526,19 @@ async def caso(request: Request):
             ruta.unlink(missing_ok=True)
         registrar(id=id_solicitud, estado="backend", ms=milisegundos(inicio), via=via, error=type(e).__name__)
         return responder(respuesta_error(ErrorApi("backend", "Error inesperado en la función.", 500, type(e).__name__), id_solicitud, BACKEND), 500)
+
+
+@app.post("/api/caso")
+async def caso(request: Request):
+    return await _atender(request)
+
+
+@app.post("/api/proteger")
+async def proteger(request: Request):
+    """Primera mitad del análisis: lee el archivo (si lo hay) y oculta los datos personales, y devuelve el texto original y el
+    protegido para que la persona confirme antes de que algo llegue a los modelos de análisis."""
+    from psi_diag.grafo import proteger_eventos
+    return await _atender(request, proteger_eventos, transmitir_demo_proteccion)
 
 
 # ----------------------------------------------------------------------------- exportación

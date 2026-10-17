@@ -26,8 +26,8 @@
         <img class="marca-psi marca-psi-grande" src="/psi.svg" alt="" width="44" height="44"><span>-DIAG con <mark class="ia">IA</mark></span>
       </h1>
       <p class="subtitulo">Asistente de apoyo al psicodiagnóstico</p>
-      <p>Describe lo que observaste en consulta, con tus propias palabras, o sube una nota escrita a mano o un PDF. El asistente organiza los síntomas, propone posibles diagnósticos según la CIE-11, señala qué información te falta y reúne guías clínicas relacionadas, todo en un reporte que puedes revisar y descargar.</p>
-      <p>Cuidamos los datos personales: antes de analizar el texto escrito ocultamos de forma automática los nombres de personas, lugares y organizaciones, aunque a veces puede fallar: revisa en «Protección de datos personales» el texto que se envió a los servicios externos. Los archivos se leen con servicios externos de reconocimiento de texto (OpenRouter y Mistral) antes de ocultar los datos personales.</p>
+      <p>Describe lo que observaste en consulta o sube una nota escrita a mano o un PDF. El asistente organiza los síntomas, propone posibles diagnósticos según la CIE-11, señala qué información te falta y reúne guías clínicas relacionadas, todo en un reporte que puedes revisar y descargar.</p>
+      <p>Cuidamos los datos personales: ocultamos de forma automática los nombres de personas, lugares y organizaciones, aunque a veces puede fallar. Antes de enviar tu caso a los modelos de análisis te mostramos el texto ya protegido, con lo ocultado resaltado, para que lo confirmes o lo rechaces. Los archivos se leen con servicios externos de reconocimiento de texto (OpenRouter y Mistral) antes de ocultar los datos personales.</p>
       <p class="aviso">Aviso: Herramienta de apoyo. No sustituye el criterio clínico: las hipótesis son sugerencias para que las valores.</p>
       <div id="bloque-codigo" class="campo" hidden>
         <label for="codigo-acceso">Código de acceso</label>
@@ -71,8 +71,21 @@
 
       <p id="mensaje-nuevo" class="mensaje" role="alert" hidden></p>
       <div class="acciones">
-        <button id="boton-generar" type="button" class="boton" disabled>Generar reporte</button>
+        <button id="boton-generar" type="button" class="boton" disabled>Continuar</button>
       </div>
+    </section>
+
+    <!-- 2b. Confirmar el texto protegido -->
+    <section id="pantalla-confirmar" aria-labelledby="titulo-confirmar" hidden>
+      <h2 id="titulo-confirmar" class="titulo-seccion" tabindex="-1">Revisa lo que se enviará</h2>
+      <p id="resumen-ocultados" class="apoyo"></p>
+      <p class="apoyo">Lo resaltado son los datos que ocultamos. La detección automática puede fallar: revisa que no aparezca ningún dato personal identificable, como el nombre de la persona.</p>
+      <div id="texto-protegido" class="texto-protegido" tabindex="0" role="region" aria-label="Texto que se enviará a los modelos de análisis"></div>
+      <div class="acciones">
+        <button id="boton-confirmar" type="button" class="boton">Confirmar y analizar</button>
+        <button id="boton-rechazar" type="button" class="boton boton-suave">Rechazar</button>
+      </div>
+      <p class="apoyo">Si rechazas, vuelves al inicio con tu texto original para que borres o anonimices lo que falte.</p>
     </section>
 
     <!-- 3. Avance -->

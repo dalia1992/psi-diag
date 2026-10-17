@@ -66,3 +66,8 @@ test("ignora_eventos_que_no_son_objetos", () => {
   const { eventos } = parsearSSE('data: null\n\ndata: 5\n\ndata: "x"\n\ndata: [1]\n\ndata: {"n":1}\n\n');
   assert.deepEqual(eventos, [{ n: 1 }]);
 });
+
+test("interpretarFin: un evento confirmar cierra la primera mitad sin error", () => {
+  const fin = interpretarFin([{ tipo: "paso", id: "proteccion", estado: "listo" }, { tipo: "confirmar", texto_original: "a", texto_protegido: "b" }]);
+  assert.deepEqual(fin, { ok: true, error: null });
+});

@@ -410,3 +410,42 @@ async def test_las_consultas_a_la_cie11_se_avisan_mientras_el_agente_busca():
     assert consulta_de({"query": {"termino": "depresión"}}) == "depresión"
     assert consulta_de({"uri": "http://id.who.int/icd/entity/1"}) == ""
     assert consulta_de({"sintomas": ["tristeza", "insomnio"]}) == "tristeza; insomnio"
+
+
+# ----------------------------------------------------------------------------- primera mitad: proteger y confirmar
+async def test_proteger_termina_con_confirmar_y_no_consulta_ningun_modelo_de_analisis():
+    from psi_diag.grafo import proteger_eventos
+
+    c, espia = construir()
+    eventos = [e async for e in proteger_eventos(ENTRADA, c)]
+    assert [(e["id"], e["estado"]) for e in eventos if e["tipo"] == "paso"] == [("proteccion", "en_curso"), ("proteccion", "listo")]
+    final = eventos[-1]
+    assert final["tipo"] == "confirmar" and final["texto_original"] == ENTRADA
+    assert "Laura" not in final["texto_protegido"] and "[PER_1]" in final["texto_protegido"] and "[LOC_1]" in final["texto_protegido"]
+    assert espia.llamadas == {"guardrail": 0, "extraer": 0, "busqueda_cie11": 0, "redactar": 0}
+
+
+async def test_proteger_un_archivo_lee_primero_y_devuelve_el_texto_leido(tmp_path):
+    from psi_diag.grafo import proteger_eventos
+
+    foto = tmp_path / "nota.jpg"
+    foto.write_bytes(b"x")
+    c, _ = construir(ocr=lambda ruta: ENTRADA)
+    eventos = [e async for e in proteger_eventos(str(foto), c)]
+    assert [e["id"] for e in eventos if e["tipo"] == "paso"][:2] == ["lectura", "lectura"]
+    assert eventos[-1]["tipo"] == "confirmar" and eventos[-1]["texto_original"] == ENTRADA
+
+
+async def test_proteger_con_ocr_que_falla_termina_con_error_amigable(tmp_path):
+    from psi_diag.grafo import proteger_eventos
+    from psi_diag.ocr import OcrError
+
+    foto = tmp_path / "nota.jpg"
+    foto.write_bytes(b"x")
+
+    def ocr(ruta):
+        raise OcrError("sin texto")
+
+    c, _ = construir(ocr=ocr)
+    eventos = [e async for e in proteger_eventos(str(foto), c)]
+    assert eventos[-1]["tipo"] == "resultado" and "archivo" in eventos[-1]["resultado"]["razon_amigable"]

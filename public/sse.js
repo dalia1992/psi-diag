@@ -46,6 +46,7 @@ export function interpretarFin(eventos) {
       },
     };
   }
-  if (lista.some((e) => e && e.tipo === "resultado")) return { ok: true, error: null };
+  // `confirmar` cierra la primera mitad del análisis (protección de datos): la persona decide si sigue.
+  if (lista.some((e) => e && (e.tipo === "resultado" || e.tipo === "confirmar"))) return { ok: true, error: null };
   return { ok: false, error: { codigo: "corte", mensaje: MENSAJE_CORTE, reintentable: true } };
 }

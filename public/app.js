@@ -50,6 +50,8 @@ const estado = {
   controlador: null,
   enCurso: false,
   procesando: false, // se están reduciendo las fotos elegidas
+  confirmado: null, // {texto}: el texto que la persona ya confirmó; con él, enviar() corre solo la segunda mitad (el análisis)
+  pendiente: null, // {original, protegido}: lo que espera su confirmación
   textoOcr: "", // texto que se leyó del archivo en este intento, para poder corregirlo a mano si luego algo falla
 };
 const filas = new Map(); // id de paso -> {li, avance, vivo, claves}
@@ -117,12 +119,12 @@ function mostrarMensaje(nodo, texto) {
 }
 
 // ----------------------------------------------------------------------------- pantallas
-const PANTALLAS = ["inicio", "nuevo", "avance", "reporte"];
+const PANTALLAS = ["inicio", "nuevo", "confirmar", "avance", "reporte"];
 
 function irA(nombre) {
   for (const p of PANTALLAS) $(`pantalla-${p}`).hidden = p !== nombre;
   window.scrollTo(0, 0);
-  const titulo = { inicio: "titulo-inicio", nuevo: "titulo-nuevo", avance: "titulo-avance", reporte: "titulo-reporte" }[nombre];
+  const titulo = { inicio: "titulo-inicio", nuevo: "titulo-nuevo", confirmar: "titulo-confirmar", avance: "titulo-avance", reporte: "titulo-reporte" }[nombre];
   if (titulo) $(titulo).focus({ preventScroll: true });
 }
 
@@ -355,8 +357,8 @@ async function procesarSeleccion() {
 
 // ----------------------------------------------------------------------------- avance
 function pasosEsperados() {
-  const ids = ["proteccion", "verificacion", "sintomas", "cie11", "guias", "reporte"];
-  return estado.modo === "archivo" ? ["lectura", ...ids] : ids;
+  if (estado.confirmado) return ["proteccion", "verificacion", "sintomas", "cie11", "guias", "reporte"]; // segunda mitad: el análisis
+  return estado.modo === "archivo" ? ["lectura", "proteccion"] : ["proteccion"]; // primera mitad: leer y proteger
 }
 
 function armarLineaDeTiempo() {
@@ -440,7 +442,7 @@ function aplicarPaso(ev) {
       const detalle = { resumen: ev.detalle.resumen || "", lineas: [...vivas, ...extra.filter((l) => !vivas.some((v) => mismaLinea(v, l)))] };
       limpiarVivo(fila);
       fila.li.appendChild(detallesDelPaso(detalle));
-      if (ev.id !== "conexion") estado.pasos.push({ titulo: nombre, resumen: detalle.resumen, lineas: detalle.lineas.map(normalizarLinea) });
+      if (ev.id !== "conexion") estado.pasos.push({ id: ev.id, titulo: nombre, resumen: detalle.resumen, lineas: detalle.lineas.map(normalizarLinea) });
     }
   }
 }
@@ -518,9 +520,10 @@ function mostrarFalla(mensaje, { reintentable = true, marcarPaso = true } = {}) 
 }
 
 function prepararAvance() {
-  estado.pasos = [];
-  estado.textoOcr = "";
-  $("titulo-avance").textContent = "Analizando el caso…";
+  const segunda = Boolean(estado.confirmado);
+  estado.pasos = segunda ? estado.pasos.filter((p) => p.id === "lectura") : []; // la lectura del archivo ya ocurrió en la primera mitad
+  if (!segunda) estado.textoOcr = "";
+  $("titulo-avance").textContent = segunda ? "Analizando el caso…" : "Protegiendo los datos personales…";
   $("bloque-error").hidden = true;
   $("acciones-cancelar").hidden = false;
   $("aviso-ocr-avance").hidden = true;
@@ -551,8 +554,12 @@ async function enviar() {
   prepararAvance();
   irA("avance");
 
+  const segunda = Boolean(estado.confirmado);
   const datos = new FormData();
-  if (estado.modo === "archivo") {
+  if (segunda) {
+    datos.append("texto", estado.confirmado.texto);
+    if (estado.modo === "archivo") datos.append("leido", "true"); // el texto salió del OCR: admite más caracteres que uno escrito
+  } else if (estado.modo === "archivo") {
     for (const archivo of estado.archivos) datos.append("archivos", archivo.blob, archivo.nombre);
     datos.append("confirma_ocr", "true");
   } else {
@@ -561,11 +568,12 @@ async function enviar() {
 
   const eventos = [];
   try {
-    const respuesta = await fetch("/api/caso", { method: "POST", headers: cabeceraAcceso(), body: datos, signal: controlador.signal });
+    const respuesta = await fetch(segunda ? "/api/caso" : "/api/proteger", { method: "POST", headers: cabeceraAcceso(), body: datos, signal: controlador.signal });
     const tipo = respuesta.headers.get("content-type") || "";
     if (!respuesta.ok || !tipo.includes("text/event-stream")) {
       const error = await errorDeRespuesta(respuesta);
       if (error.codigo === "acceso") {
+        estado.confirmado = null;
         estado.codigo = "";
         $("codigo-acceso").value = "";
         irA("inicio");
@@ -580,6 +588,11 @@ async function enviar() {
     const fin = interpretarFin(eventos);
     if (!fin.ok) {
       mostrarFalla(fin.error.mensaje, { reintentable: fin.error.reintentable });
+      return;
+    }
+    const porConfirmar = eventos.find((e) => e.tipo === "confirmar");
+    if (porConfirmar) {
+      pedirConfirmacion(porConfirmar);
       return;
     }
     const resultado = eventos.find((e) => e.tipo === "resultado").resultado || {};
@@ -621,6 +634,49 @@ async function leerFlujo(respuesta, senal, eventos) {
   }
   buffer += decodificador.decode();
   if (!senal.aborted) procesar(parsearSSE(buffer + "\n\n").eventos);
+}
+
+const MARCAS = /(\[(?:PER|LOC|ORG)_\d+\])/g;
+const TIPOS_MARCA = [["PER", "persona", "personas"], ["LOC", "lugar", "lugares"], ["ORG", "organización", "organizaciones"]];
+
+/** Muestra el texto ya protegido con cada marca ([PER_1]…) resaltada, y espera a que la persona confirme o rechace. */
+function pedirConfirmacion(ev) {
+  const original = typeof ev.texto_original === "string" ? ev.texto_original : "";
+  const protegido = typeof ev.texto_protegido === "string" ? ev.texto_protegido : "";
+  estado.pendiente = { original, protegido };
+  const marcas = new Set(protegido.match(MARCAS) || []);
+  const partes = [];
+  for (const [tipo, uno, varios] of TIPOS_MARCA) {
+    const n = [...marcas].filter((m) => m.startsWith(`[${tipo}_`)).length;
+    if (n) partes.push(`${n} ${n === 1 ? uno : varios}`);
+  }
+  $("resumen-ocultados").textContent = partes.length
+    ? `Ocultamos: ${partes.join(", ")}.`
+    : "No detectamos datos personales que ocultar.";
+  const caja = $("texto-protegido");
+  vaciar(caja);
+  for (const trozo of protegido.split(MARCAS)) {
+    if (!trozo) continue;
+    if (marcas.has(trozo)) caja.appendChild(el("mark", "marca", trozo));
+    else caja.appendChild(document.createTextNode(trozo));
+  }
+  irA("confirmar");
+  anunciar("Revisa el texto que se enviará y confirma o rechaza.");
+}
+
+function confirmarTexto() {
+  if (!estado.pendiente || estado.enCurso) return;
+  estado.confirmado = { texto: estado.pendiente.original };
+  estado.pendiente = null;
+  enviar();
+}
+
+/** Rechazar: vuelve a «Nuevo caso» con el texto original (con los nombres) para que la persona decida cómo ocultarlos. */
+function rechazarTexto() {
+  const original = estado.pendiente ? estado.pendiente.original : "";
+  estado.pendiente = null;
+  if (estado.modo === "archivo") estado.textoOcr = original; // «Editar el caso» lo deja en el campo de texto, listo para corregir
+  editarCaso();
 }
 
 function recibirResultado(resultado) {
@@ -879,6 +935,9 @@ function cancelarEnvio() {
 }
 
 function nuevoCaso() {
+  estado.confirmado = null;
+  estado.pendiente = null;
+  estado.textoOcr = "";
   cancelarEnvio();
   estado.reporte = null;
   estado.pasos = [];
@@ -904,6 +963,8 @@ function nuevoCaso() {
 // otra vez); «Subir archivo» sigue a un clic para usar otro. Sin texto leído, vuelve a la pantalla tal como estaba.
 function editarCaso() {
   const leido = estado.textoOcr;
+  estado.confirmado = null;
+  estado.pendiente = null;
   cancelarEnvio();
   if (leido) {
     elegirModo("texto");
@@ -933,6 +994,8 @@ function conectar() {
   $("boton-generar").addEventListener("click", enviar);
   $("boton-reintentar").addEventListener("click", enviar);
   $("boton-editar").addEventListener("click", editarCaso);
+  $("boton-confirmar").addEventListener("click", confirmarTexto);
+  $("boton-rechazar").addEventListener("click", rechazarTexto);
   $("boton-cancelar").addEventListener("click", editarCaso);
   $("boton-docx").addEventListener("click", (e) => descargar("docx", e.currentTarget));
   $("boton-pdf").addEventListener("click", (e) => descargar("pdf", e.currentTarget));

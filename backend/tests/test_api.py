@@ -689,3 +689,40 @@ def test_el_total_de_los_archivos_no_puede_pasar_de_4_mb(cliente, monkeypatch):
     archivos = [("archivos", (f"h{i}.png", png_valido(lado=200), "image/png")) for i in range(3)]
     r = cliente.post("/api/caso", data={"confirma_ocr": "true"}, files=archivos)
     assert r.status_code == 413
+
+
+# ----------------------------------------------------------------------------- /api/proteger
+def test_proteger_devuelve_el_texto_protegido_para_confirmar(cliente):
+    r = cliente.post("/api/proteger", data={"texto": ENTRADA})
+    assert r.status_code == 200 and r.headers["content-type"].startswith("text/event-stream")
+    eventos = eventos_de(r)
+    assert eventos[-1]["tipo"] == "confirmar"
+    assert "Laura" not in eventos[-1]["texto_protegido"] and "[PER_1]" in eventos[-1]["texto_protegido"]
+    assert eventos[-1]["texto_original"] == ENTRADA
+    assert "resultado" not in {e["tipo"] for e in eventos}
+
+
+def test_proteger_pide_codigo_y_valida_la_entrada_como_caso(cliente, monkeypatch):
+    assert cliente.post("/api/proteger", data={"texto": "corto"}).status_code == 400
+    monkeypatch.setenv("ACCESS_CODE", "secreto")
+    assert cliente.post("/api/proteger", data={"texto": ENTRADA}).status_code == 401
+    assert cliente.post("/api/proteger", data={"texto": ENTRADA}, headers={"x-access-code": "secreto"}).status_code == 200
+
+
+def test_proteger_no_registra_el_texto_del_caso(cliente):
+    registros = []
+    manejador = type("M", (__import__("logging").Handler,), {"emit": lambda self, r: registros.append(r.getMessage())})()
+    modulo_app.log.addHandler(manejador)
+    try:
+        cliente.post("/api/proteger", data={"texto": ENTRADA})
+    finally:
+        modulo_app.log.removeHandler(manejador)
+    assert registros and all("Laura" not in m for m in registros)
+
+
+def test_texto_leido_de_un_archivo_admite_mas_caracteres_que_uno_escrito(cliente):
+    largo = ("Paciente con tristeza persistente y dificultad para dormir. " * 300)[:12000]
+    assert cliente.post("/api/caso", data={"texto": largo}).status_code == 400
+    r = cliente.post("/api/caso", data={"texto": largo, "leido": "true"})
+    assert r.status_code == 200
+    assert cliente.post("/api/caso", data={"texto": "x" * 41_000, "leido": "true"}).status_code == 400

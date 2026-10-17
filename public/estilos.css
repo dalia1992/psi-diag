@@ -138,6 +138,8 @@ input[type="file"] { font: inherit; max-width: 100%; }
 .archivo-elegido { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; padding: .35rem 0; border-bottom: 1px solid var(--lavanda-linea); }
 .archivo-nombre { font-weight: 600; overflow-wrap: anywhere; }
 .boton-chico { padding: .15rem .8rem; min-height: 32px; font-size: .9rem; margin-left: auto; }
+.texto-protegido { white-space: pre-wrap; overflow-wrap: anywhere; border-left: 4px solid var(--lavanda-linea); padding: .5rem 0 .5rem 12px; margin: 1rem 0; max-height: 28rem; overflow-y: auto; }
+.marca { background: var(--lavanda-suave); color: #4b4388; border-radius: 6px; padding: 0 .3em; font-weight: 700; }
 .conclusion { margin: 0 0 .75rem; }
 
 details { margin: 2px 0 0; }
